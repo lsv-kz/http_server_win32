@@ -254,6 +254,17 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         exit(1);
     }
     //------------------------------------------------------------------
+    thread CgiHandler;
+    try
+    {
+        CgiHandler = thread(cgi_handler, ReqMan);
+    }
+    catch (...)
+    {
+        print_err("%d<%s:%d> Error create thread(cgi_handler)\n", numChld, __func__, __LINE__);
+        exit(1);
+    }
+    //------------------------------------------------------------------
     thread EventHandler;
     try
     {
@@ -283,7 +294,6 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         thr.detach();
         ++n;
     }
-
     //------------------------------------------------------------------
     thread thrReqMan;
     try
@@ -363,10 +373,12 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         __func__, __LINE__, n, allConn);
 
     ReqMan->close_manager();
-    thrReqMan.join();
-
     close_event_handler();
+    close_cgi_handler();
+    
+    thrReqMan.join();
     EventHandler.join();
+    CgiHandler.join();
 
     DWORD rd, pid = GetCurrentProcessId();
     bool res = WriteFile(hExit_out, &pid, sizeof(pid), &rd, NULL);

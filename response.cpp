@@ -100,10 +100,6 @@ void response1(RequestManager* ReqMan)
 
             req->err = ret;
         }
-        else if (req->reqMethod == M_OPTIONS)
-        {
-            req->err = options(req);
-        }
         else
             req->err = -RS501;
 
@@ -153,18 +149,14 @@ int fastcgi(Connect* req, const wchar_t* wPath)
 
     if (!i)
         return -RS404;
-    req->resp.scriptType = fast_cgi;
-    req->wScriptName = i->scrpt_name.c_str();
-    int ret = fcgi(req);
-    req->wScriptName = NULL;
-    return ret;
+
+    return -RS404;
 }
 //======================================================================
 int response2(RequestManager* ReqMan, Connect* req)
 {
     if ((strstr(req->decodeUri, ".php")))
     {
-        int ret;
         if ((conf->usePHP != "php-cgi") && (conf->usePHP != "php-fpm"))
         {
             print_err(req, "<%s:%d> Not found: %s\n", __func__, __LINE__, req->decodeUri);
@@ -180,32 +172,23 @@ int response2(RequestManager* ReqMan, Connect* req)
         req->wScriptName = req->wDecodeUri.c_str();
         if (conf->usePHP == "php-cgi")
         {
-            req->resp.scriptType = php_cgi;
-            ret = cgi(req);
-            req->wScriptName = NULL;
-            return ret;
+            req->resp.scriptType = PHPCGI;
+            push_cgi(req);
+            return 1;
         }
         else if (conf->usePHP == "php-fpm")
         {
-            if (req->reqMethod == M_HEAD)
-                return -RS405;
-            req->resp.scriptType = php_fpm;
-            ret = fcgi(req);
-            req->wScriptName = NULL;
-            return ret;
+            return -RS404;
         }
     }
 
     if (!strncmp(req->decodeUri, "/cgi-bin/", 9)
         || !strncmp(req->decodeUri, "/cgi/", 5))
     {
-        req->resp.scriptType = cgi_ex;
-        wstring s = req->wDecodeUri;
-        req->wScriptName = s.c_str();
-
-        int ret = cgi(req);
-        req->wScriptName = NULL;
-        return ret;
+        req->wScriptName = req->wDecodeUri.c_str();
+        req->resp.scriptType = CGI;
+        push_cgi(req);
+        return 1;
     }
     //-------------------------- get path ------------------------------
     wstring wPath;
@@ -218,14 +201,15 @@ int response2(RequestManager* ReqMan, Connect* req)
     struct _stati64 st64;
     if (_wstati64(wPath.c_str(), &st64) == -1)
     {
-        int ret = fastcgi(req, req->wDecodeUri.c_str());
+        /*int ret = fastcgi(req, req->wDecodeUri.c_str());
         if (ret < 0)
         {
             String sTmp;
             utf16_to_utf8(req->wDecodeUri, sTmp);
             print_err(req, "<%s:%d> Error not found (%d) [%s]\n", __func__, __LINE__, ret, sTmp.c_str());
         }
-        return ret;
+        return ret;*/
+        return -RS404;
     }
     else
     {
@@ -301,13 +285,14 @@ int response2(RequestManager* ReqMan, Connect* req)
                     req->wScriptName = s.c_str();
                     if (conf->usePHP == "php-fpm")
                     {
-                        req->resp.scriptType = php_fpm;
-                        ret = fcgi(req);
+                        //req->resp.scriptType = PHPFPM;
+                        return -RS404;
                     }
                     else if (conf->usePHP == "php-cgi")
                     {
-                        req->resp.scriptType = php_cgi;
-                        ret = cgi(req);
+                        req->resp.scriptType = PHPCGI;
+                        push_cgi(req);
+                        return 1;
                     }
                     else
                         ret = -1;
@@ -320,21 +305,16 @@ int response2(RequestManager* ReqMan, Connect* req)
 
             if (conf->index_pl == 'y')
             {
-                req->resp.scriptType = cgi_ex;
+                req->resp.scriptType = CGI;
                 req->wScriptName = L"/cgi-bin/index.pl";
-
-                int ret = cgi(req);
-                req->wScriptName = NULL;
-                return ret;
+                push_cgi(req);
+                return 1;
             }
             else if (conf->index_fcgi == 'y')
             {
-                req->resp.scriptType = fast_cgi;
-                req->wScriptName = L"/index.fcgi";
-                int ret = fcgi(req);
-                req->wScriptName = NULL;
-                if (ret == 0)
-                    return ret;
+                /*req->resp.scriptType = FASTCGI;
+                req->wScriptName = L"/index.fcgi";*/
+                return -RS404;;
             }
 
             return index_dir(req, wPath);

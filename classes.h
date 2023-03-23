@@ -271,47 +271,6 @@ public:
         return 0;
     }
     //------------------------------------------------------------------
-    int cgi_to_client(PIPENAMED* Pipe, int sizeBuf)
-    {
-        if (err) return -1;
-        while (1)
-        {
-            if (CHUNK_SIZE_BUF <= i)
-            {
-                int ret = send_chunk(i);
-                if (ret < 0)
-                    return ret;
-            }
-
-            int size = CHUNK_SIZE_BUF - i, rd;
-            int ret = ReadFromPipe(Pipe, buf + MAX_LEN_SIZE_CHUNK + i, size, &rd, sizeBuf, conf->TimeOutCGI);
-            if (ret == 0) // BROKEN_PIPE
-            {
-          //      print_err("<%s:%d> ret=%d, rd=%d\n", __func__, __LINE__, ret, rd);
-                if (rd > 0)
-                {
-                    i += rd;
-                }
-                break;
-            }
-            else if (ret < 0) // ERROR
-            {
-                i = 0;
-                return ret;
-            }
-            else
-            {
-                i += rd;
-                if (rd != size)
-                {
-                    print_err("<%s:%d> %d rd != size %d\n", __func__, __LINE__, rd, size);
-                }
-            }
-        }
-
-        return 0;
-    }
-    //------------------------------------------------------------------
     int fcgi_to_client(SOCKET fcgi_sock, int len)
     {
         if (err) return -1;

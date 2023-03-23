@@ -52,8 +52,6 @@ enum {
     RS500 = 500, RS501, RS502, RS503, RS504, RS505
 };
 
-enum { cgi_ex = 1, php_cgi, php_fpm, fast_cgi };
-
 enum {
     M_GET = 1, M_HEAD, M_POST, M_OPTIONS, M_PUT,
     M_PATCH, M_DELETE, M_TRACE, M_CONNECT
@@ -71,6 +69,10 @@ enum OPERATION_TYPE {
     READ_REQUEST = 1, SEND_RESP_HEADERS, SEND_ENTITY,
     CGI_CONNECT, FCGI_BEGIN, CGI_PARAMS, CGI_END_PARAMS, CGI_STDIN, CGI_END_STDIN, CGI_STDOUT,
 };
+enum CGI_TYPE { NONE = 1, CGI, PHPCGI, PHPFPM, FASTCGI, SCGI, };
+enum CGI_DIR { CGI_IN, CGI_OUT };
+enum CGI_STATUS { FCGI_READ_HEADER, READ_HEADERS, SEND_HEADERS, READ_CONTENT, READ_ERROR, READ_PADDING, FCGI_CLOSE };
+enum POLL_STATUS { WAIT, WORK };
 
 typedef struct fcgi_list_addr {
     std::wstring scrpt_name;
@@ -87,6 +89,7 @@ typedef struct
     HANDLE hEvent;
     DWORD dwState;
     BOOL fPendingIO;
+    bool timeout;
 } PIPENAMED;
 
 struct Config
@@ -153,6 +156,29 @@ struct hdr {
     int len;
 };
 
+struct Cgi
+{
+    PIPENAMED Pipe;
+
+    char* bufEnv;
+    size_t sizeBufEnv;
+    size_t lenEnv;
+        
+    CGI_STATUS status;
+    CGI_DIR dir;
+    char buf[8 + 4096 + 8];
+    int  size_buf = 4096;
+    long len_buf;
+    long len_post;
+    char *p;
+        
+    Cgi();
+    int init(size_t);
+    size_t param(const char* name, const char* val);
+        
+    ~Cgi();
+};
+
 class Connect
 {
 public:
@@ -165,30 +191,31 @@ public:
     int       numChld;
     SOCKET    clientSocket;
     int       err;
-    __time64_t   sock_timer;
+    __time64_t sock_timer;
     int       timeout;
     short     event;
     OPERATION_TYPE operation;
+    POLL_STATUS    poll_status;
 
-    char      remoteAddr[NI_MAXHOST];
-    char      remotePort[NI_MAXSERV];
+    char remoteAddr[NI_MAXHOST];
+    char remotePort[NI_MAXSERV];
 
     struct
     {
-        char      buf[SIZE_BUF_REQUEST];
-        int       len;
+        char buf[SIZE_BUF_REQUEST];
+        int  len;
     } req;
     
-    char*     p_newline;
-    char*     tail;
-    int       lenTail;
+    char* p_newline;
+    char* tail;
+    int   lenTail;
 
     int       i_arrHdrs;
     hdr       arrHdrs[MAX_HEADERS + 1];
 
-    char      decodeUri[SIZE_BUF_REQUEST];
+    char  decodeUri[SIZE_BUF_REQUEST];
 
-    std::wstring   wDecodeUri;
+    std::wstring  wDecodeUri;
 
     char* uri;
     size_t uriLen;
@@ -202,7 +229,8 @@ public:
     int   httpProt;
     int   connKeepAlive;
 
-    struct {
+    struct
+    {
         int       iConnection;
         int       iHost;
         int       iUserAgent;
@@ -236,6 +264,8 @@ public:
         const char* p;
         int len;
     } html;
+    
+    Cgi cgi;
     
     SOURCE_ENTITY source_entity;
     MODE_SEND mode_send;
@@ -328,7 +358,7 @@ public:
     void close_manager();
 };
 
-//=====================================================================
+//======================================================================
 int in4_aton(const char* host, struct in_addr* addr);
 SOCKET create_server_socket(const Config* conf);
 
@@ -336,10 +366,7 @@ void response1(RequestManager* ReqMan);
 int response2(RequestManager* ReqMan, Connect* req);
 int options(Connect* req);
 int index_dir(Connect* req, std::wstring& path);
-//---------------------------------------------------------------------
-int cgi(Connect* req);
-int fcgi(Connect* req);
-//---------------------------------------------------------------------
+//----------------------------------------------------------------------
 int ErrorStrSock(const char* f, int line, const char* s);
 int PrintError(const char* f, int line, const char* s);
 std::string get_time();
@@ -377,27 +404,26 @@ int send_response_headers(Connect* req);
 
 int read_timeout(SOCKET sock, char* buf, int len, int timeout);
 int write_timeout(SOCKET sock, const char* buf, size_t len, int timeout);
-int ReadFromPipe(PIPENAMED* Pipe, char* buf, int sizeBuf, int* allRD, int maxRd, int timeout);
-int WriteToPipe(PIPENAMED* Pipe, const char* buf, int lenBuf, int maxRd, int timeout);
-
-long long client_to_script(SOCKET sock, PIPENAMED* Pipe, long long cont_len, int sizePipeBuf, int timeout);
 int send_file_1(SOCKET sock, int fd_in, char* buf, int* size, long long offset, long long* cont_len);
 int send_file_2(SOCKET sock, int fd_in, char* buf, int size);
 
 int read_line_sock(SOCKET sock, char* buf, int size, int timeout);
-//-----------------------------------------------------------------
+//----------------------------------------------------------------------
 void open_logfiles(HANDLE, HANDLE);
 void print_err(Connect* req, const char* format, ...);
 void print_log(Connect* req);
 HANDLE GetHandleLogErr();
-//-----------------------------------------------------------------
+//----------------------------------------------------------------------
 void end_response(Connect* req);
-
+//----------------------------------------------------------------------
 void event_handler(RequestManager* ReqMan);
 void push_pollin_list(Connect* req);
 void push_send_file(Connect* req);
 void push_send_html(Connect* req);
 void close_event_handler();
-
+//----------------------------------------------------------------------
+void cgi_handler(RequestManager *ReqMan);
+void push_cgi(Connect *req);
+void close_cgi_handler(void);
 
 #endif

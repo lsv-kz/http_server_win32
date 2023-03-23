@@ -49,6 +49,9 @@ int create_response_headers(Connect* req)
     }
     else
         req->resp_headers.s << "Connection: " << (req->connKeepAlive == 0 ? "close" : "keep-alive") << "\r\n";
+
+    if (req->mode_send == CHUNK)
+        req->resp_headers.s << "Transfer-Encoding: chunked\r\n";
     /*----------------------------------------------------------------*/
     if (req->hdrs.size())
     {
@@ -65,7 +68,7 @@ int create_response_headers(Connect* req)
         req->req_hdrs.Value[req->req_hdrs.iReferer] = "Error create response headers";
         return -1;
     }
-    print_err(req, "<%s:%d> -----------------\n%s-------------\n", __func__, __LINE__, req->resp_headers.s.c_str());
+    ///print_err(req, "<%s:%d> -----------------\n%s-------------\n", __func__, __LINE__, req->resp_headers.s.c_str());
     return 0;
 }
 //=====================================================================
