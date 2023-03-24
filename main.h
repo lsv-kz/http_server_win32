@@ -210,8 +210,8 @@ public:
     char* tail;
     int   lenTail;
 
-    int       i_arrHdrs;
-    hdr       arrHdrs[MAX_HEADERS + 1];
+    int  i_arrHdrs;
+    hdr  arrHdrs[MAX_HEADERS + 1];
 
     char  decodeUri[SIZE_BUF_REQUEST];
 
@@ -274,7 +274,7 @@ public:
         int  respStatus;
         std::string sTime;
         long long respContentLength;
-        const char * respContentType;
+        const char *respContentType;
         long long fileSize;
         int  countRespHeaders = 0;
 

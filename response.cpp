@@ -314,7 +314,7 @@ int response2(RequestManager* ReqMan, Connect* req)
             {
                 /*req->resp.scriptType = FASTCGI;
                 req->wScriptName = L"/index.fcgi";*/
-                return -RS404;;
+                return -RS404;
             }
 
             return index_dir(req, wPath);

@@ -129,7 +129,7 @@ void RequestManager::close_manager()
     cond_new_thr.notify_one();
     cond_exit_thr.notify_one();
 }
-//==========================================================
+//======================================================================
 void end_response(Connect* req)
 {
     if ((req->connKeepAlive == 0) || req->err < 0)
@@ -138,7 +138,7 @@ void end_response(Connect* req)
         {
             req->resp.respStatus = -req->err;
             req->err = -1;
-            req->hdrs = "";
+            req->connKeepAlive = 0;
             if (send_message(req, NULL) == 1)
                 return;
         }
@@ -151,9 +151,9 @@ void end_response(Connect* req)
         shutdown(req->clientSocket, SD_BOTH);
         closesocket(req->clientSocket);
         delete req;
-        mtx_conn.lock();
+    mtx_conn.lock();
         --count_conn;
-        mtx_conn.unlock();
+    mtx_conn.unlock();
         cond_close_conn.notify_all();
     }
     else

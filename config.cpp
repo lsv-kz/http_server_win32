@@ -277,7 +277,7 @@ int read_conf_file(const char* path_conf)
             else if (s1 == "UsePHP")
                 s2 >> c.usePHP;
             else if ((s1 == "ShowMediaFiles") && isbool(s2.c_str()))
-                s2 >> c.ShowMediaFiles;
+                c.ShowMediaFiles = s2[0];
             else if ((s1 == "ClientMaxBodySize") && isnumber(s2.c_str()))
                 s2 >> c.ClientMaxBodySize;
             else

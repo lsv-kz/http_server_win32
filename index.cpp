@@ -165,24 +165,24 @@ int create_index_html(Connect* r, vector <string> & vecDirs, vector <struct stFi
     //---------------------------- Files -------------------------------
     for (int i = 0; i < files; ++i)
     {
-            if (isimage(vecFiles[i].name.c_str()) && (conf->ShowMediaFiles == 'y'))
-            {
-                if (vecFiles[i].size < 20000)
-                    r->html.s << "   <tr><td><a href=\"" << encode(vecFiles[i].name) << "\"><img src=\"" <<
-                    encode(vecFiles[i].name) << "\"></a><br>";
-                else
-                    r->html.s << "   <tr><td><a href=\"" << encode(vecFiles[i].name) << "\"><img src=\"" << encode(vecFiles[i].name) <<
-                    "\" width=\"320\"></a><br>";
-                r->html.s << vecFiles[i].name << "</td><td align=\"right\">" << vecFiles[i].size << " bytes</td></tr>\n"
-                    "   <tr><td></td><td></td></tr>\n";
-            }
-            else if (isaudiofile(vecFiles[i].name.c_str()) && (conf->ShowMediaFiles == 'y'))
-                r->html.s << "   <tr><td><audio preload=\"none\" controls src=\"" << encode(vecFiles[i].name) << "\"></audio>"
-                "<a href=\"" << encode(vecFiles[i].name) << "\">" << vecFiles[i].name <<
-                "</a></td><td align=\"right\">" << vecFiles[i].size << " bytes</td></tr>\n";
+        if (isimage(vecFiles[i].name.c_str()) && (conf->ShowMediaFiles == 'y'))
+        {
+            if (vecFiles[i].size < 20000)
+                r->html.s << "   <tr><td><a href=\"" << encode(vecFiles[i].name) << "\"><img src=\"" <<
+                encode(vecFiles[i].name) << "\"></a><br>";
             else
-                r->html.s << "   <tr><td><a href=\"" << encode(vecFiles[i].name) << "\">" << vecFiles[i].name << "</a></td>"
-                "<td align=\"right\">" << vecFiles[i].size << " bytes</td></tr>\n";
+                r->html.s << "   <tr><td><a href=\"" << encode(vecFiles[i].name) << "\"><img src=\"" << encode(vecFiles[i].name) <<
+                "\" width=\"320\"></a><br>";
+            r->html.s << vecFiles[i].name << "</td><td align=\"right\">" << vecFiles[i].size << " bytes</td></tr>\n"
+                "   <tr><td></td><td></td></tr>\n";
+        }
+        else if (isaudiofile(vecFiles[i].name.c_str()) && (conf->ShowMediaFiles == 'y'))
+            r->html.s << "   <tr><td><audio preload=\"none\" controls src=\"" << encode(vecFiles[i].name) << "\"></audio>"
+            "<a href=\"" << encode(vecFiles[i].name) << "\">" << vecFiles[i].name <<
+            "</a></td><td align=\"right\">" << vecFiles[i].size << " bytes</td></tr>\n";
+        else
+            r->html.s << "   <tr><td><a href=\"" << encode(vecFiles[i].name) << "\">" << vecFiles[i].name << "</a></td>"
+            "<td align=\"right\">" << vecFiles[i].size << " bytes</td></tr>\n";
     }
     //------------------------------------------------------------------
     r->html.s << "  </table>\n"

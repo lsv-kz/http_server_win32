@@ -74,7 +74,9 @@ int create_response_headers(Connect* req)
 //=====================================================================
 int send_message(Connect* r, const char* msg)
 {
+    r->hdrs = "";
     r->html.s = "";
+    r->mode_send = NO_CHUNK;
     r->html.s.reserve(256);
     if (r->httpProt == 0)
         r->httpProt = HTTP11;
@@ -107,7 +109,6 @@ int send_message(Connect* r, const char* msg)
     }
 
     r->connKeepAlive = 0;
-
     if ((r->httpProt != HTTP09) && create_response_headers(r))
         return -1;
 
