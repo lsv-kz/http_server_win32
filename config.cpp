@@ -236,8 +236,6 @@ int read_conf_file(const char* path_conf)
                 s2 >> c.ListenBacklog;
             else if ((s1 == "MaxRequests") && isnumber(s2.c_str()))
                 s2 >> c.MaxRequests;
-            else if ((s1 == "MaxEventSock") && isnumber(s2.c_str()))
-                s2 >> c.MaxEventSock;
             else if ((s1 == "MaxRequestsPerClient") && isnumber(s2.c_str()))
                 s2 >> c.MaxRequestsPerClient;
             else if ((s1 == "NumChld") && isnumber(s2.c_str()))
@@ -246,12 +244,14 @@ int read_conf_file(const char* path_conf)
                 s2 >> c.MaxThreads;
             else if ((s1 == "MinThreads") && isnumber(s2.c_str()))
                 s2 >> c.MinThreads;
+            else if ((s1 == "MaxCgiProc") && isnumber(s2.c_str()))
+                s2 >> c.MaxCgiProc;
             else if ((s1 == "TimeoutKeepAlive") && isnumber(s2.c_str()))
                 s2 >> c.TimeoutKeepAlive;
             else if ((s1 == "TimeOut") && isnumber(s2.c_str()))
                 s2 >> c.TimeOut;
-            else if ((s1 == "TimeOutCGI") && isnumber(s2.c_str()))
-                s2 >> c.TimeOutCGI;
+            else if ((s1 == "TimeoutCGI") && isnumber(s2.c_str()))
+                s2 >> c.TimeoutCGI;
             else if ((s1 == "TimeoutPoll") && isnumber(s2.c_str()))
                 s2 >> c.TimeoutPoll;
             else if (s1 == "PerlPath")

@@ -111,12 +111,11 @@ int main_proc(const char* name_proc)
         << "\n   MinThreads = " << conf->MinThreads
         << "\n\n   ListenBacklog = " << conf->ListenBacklog
         << "\n   MaxRequests = " << conf->MaxRequests
-        << "\n   MaxEventSock = " << conf->MaxEventSock
         << "\n\n   MaxRequestsPerClient " << conf->MaxRequestsPerClient
         << "\n   TimeoutKeepAlive = " << conf->TimeoutKeepAlive
         << "\n   TimeOut = " << conf->TimeOut
         << "\n   TimeoutPoll = " << conf->TimeoutPoll
-        << "\n   TimeOutCGI = " << conf->TimeOutCGI
+        << "\n   TimeoutCGI = " << conf->TimeoutCGI
         << "\n\n   php: " << conf->usePHP.c_str()
         << "\n\n   path_php-fpm: " << conf->pathPHP_FPM.c_str();
     wcerr << L"\n   path_php-cgi: " << conf->wPathPHP_CGI
@@ -156,17 +155,16 @@ int main_proc(const char* name_proc)
         ZeroMemory(&si, sizeof(STARTUPINFO));
         si.cb = sizeof(STARTUPINFO);
         si.dwFlags |= STARTF_USESTDHANDLES;
-        //si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
         //si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+        si.hStdError = GetHandleLogErr();
 
-        //stringstream ss;
         String ss;
         ss << name_proc << " child " << numChld << ' ' << pid << ' '
            << sockServer << ' '<< hExit_out << ' ' << hLog << ' ' << hLogErr;
-          
-        //cerr << name_proc << " child " << numChld << "\n";
+
         bool bSuccess = CreateProcessA(NULL, (char*)ss.c_str(), NULL, NULL, true, 0, NULL, NULL, &si, &pi);
-        if (!bSuccess)//  .str()
+        if (!bSuccess)
         {
             DWORD err = GetLastError();
             print_err("<%s:%d> Error CreateProcessA(): %s\n error=%lu\n", __func__, __LINE__, ss.c_str(), err);

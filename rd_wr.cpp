@@ -1,83 +1,12 @@
 #include "main.h"
 #include <winsock2.h>
 using namespace std;
-
-/*====================================================================*/
-int wait_read(SOCKET sock, int timeout)
-{
-    WSAPOLLFD readfds;
-    readfds.fd = sock;
-    readfds.events = POLLIN;
-    int ret, tm;
-
-    if (timeout == -1)
-        tm = -1;
-    else
-        tm = timeout * 1000;
-
-    ret = WSAPoll(&readfds, 1, tm);
-    if (ret == SOCKET_ERROR)
-    {
-        ErrorStrSock(__func__, __LINE__, "Error select()");
-        return -1;
-    }
-    else if (!ret)
-        return -RS408;
-
-    if (readfds.revents & POLLIN)
-        return 1;
-    else if (readfds.revents & POLLHUP)
-        return 0;
-    else if (readfds.revents & POLLERR)
-    {
-        print_err("<%s:%d> POLLERR fdrd.revents = 0x%02x\n", __func__, __LINE__, readfds.revents);
-        return -1;
-    }
-
-    print_err("<%s:%d> Error .revents = 0x%02x\n", __func__, __LINE__, readfds.revents);
-    return -1;
-}
-//======================================================================
-int read_timeout(SOCKET sock, char* buf, int len, int timeout)
-{
-    int read_bytes = 0, ret;
-    char* p;
-
-    p = buf;
-    while (len > 0)
-    {
-        ret = wait_read(sock, timeout);
-        if (ret < 0)
-        {
-            return ret;
-        }
-        else if (!ret)
-            break;
-
-        ret = recv(sock, p, len, 0);
-        if (ret == -1)
-        {
-            ErrorStrSock(__func__, __LINE__, "Error recv()");
-            return -1;
-        }
-        else if (ret == 0)
-            break;
-        else
-        {
-            p += ret;
-            len -= ret;
-            read_bytes += ret;
-        }
-    }
-
-    return read_bytes;
-}
 //======================================================================
 int write_timeout(SOCKET sock, const char* buf, size_t len, int timeout)
 {
     WSAPOLLFD writefds;
     int ret, write_bytes = 0;
- //   print_err("<%s:%d> ------\n", __func__, __LINE__);
+
     writefds.fd = sock;
     writefds.events = POLLWRNORM;
 
@@ -187,90 +116,6 @@ int send_file_2(SOCKET sock, int fd_in, char* buf, int size)
     }
 
     return wr;
-}
-//======================================================================
-int read_line_sock(SOCKET sock, char* buf, int size, int timeout)
-{
-    int ret, n, read_bytes = 0;
-
-    for (; size > 0; )
-    {
-        n = wait_read(sock, timeout);
-        if (n <= 0)
-            return n;
-        ret = recv(sock, buf, size, MSG_PEEK);
-        if (ret > 0)
-        {
-            char* pr, * pn;
-            pr = (char*)memchr(buf, '\r', ret);
-            pn = (char*)memchr(buf, '\n', ret);
-            if (pr && pn)
-            {
-                if ((pr + 1) == pn)
-                {
-                    n = (int)(pn - buf) + 1;
-                    ret = recv(sock, buf, n, 0);
-                    if (ret <= 0)
-                    {
-                        if (ret == SOCKET_ERROR)
-                        {
-                            ErrorStrSock(__func__, __LINE__, "Error recv()");
-                        }
-                        return ret;
-                    }
-                    return read_bytes + ret;
-                }
-                else if ((pr + 1) < pn)
-                {
-                    print_err("<%s:%d> Error: '\\n' not found\n", __func__, __LINE__);
-                    return -RS400;
-                }
-                else if (pr > pn)
-                {
-                    print_err("<%s:%d> Error: '\\r' not found\n", __func__, __LINE__);
-                    return -RS400;
-                }
-                else
-                {
-                    print_err("<%s:%d> Error: '?' not found\n", __func__, __LINE__);
-                    return -RS400;
-                }
-            }
-            else if ((!pr) && pn && (*(pn - 1) != '\r'))
-            {
-                print_err("<%s:%d> Error: '\\r' not found\n", __func__, __LINE__);
-                return -RS400;
-            }
-            else if (pr && (!pn) && ((pr + 1) != (buf + ret)))
-            {
-                print_err("<%s:%d> Error: '\\n' not found\n", __func__, __LINE__);
-                return -RS400;
-            }
-
-            n = recv(sock, buf, ret, 0);
-            if (n != ret)
-            {
-                if (n == SOCKET_ERROR)
-                {
-                    ErrorStrSock(__func__, __LINE__, "Error recv()");
-                }
-                return -1;
-            }
-            buf += n;
-            size -= n;
-            read_bytes += n;
-        }
-        else // ret <= 0
-        {
-            if (ret == SOCKET_ERROR)
-            {
-                ErrorStrSock(__func__, __LINE__, "Error recv()");
-            }
-            return ret;
-        }
-    }
-
-    return -RS414;
 }
 //======================================================================
 int Connect::hd_read()

@@ -20,7 +20,7 @@ OBJS = $(OBJSDIR)/server.o \
 	$(OBJSDIR)/index.o \
 
 server.exe: $(OBJS)
-	$(CC) $(CFLAGS) -o $@  $(OBJS)  -lwsock32 -lws2_32
+	$(CC) $(CFLAGS) -o $@  $(OBJS)  -lwsock32 -lws2_32 -static -static-libgcc -static-libstdc++
 
 $(OBJSDIR)/server.o: server.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@

@@ -59,26 +59,32 @@ enum {
 
 enum { HTTP09 = 1, HTTP10, HTTP11, HTTP2 };
 
-enum {
-    EXIT_THR = 1,
-};
+enum { EXIT_THR = 1 };
 
 enum MODE_SEND { NO_CHUNK, CHUNK, CHUNK_END };
-enum SOURCE_ENTITY { FROM_FILE = 1, FROM_DATA_BUFFER, };
-enum OPERATION_TYPE {
-    READ_REQUEST = 1, SEND_RESP_HEADERS, SEND_ENTITY,
-    CGI_CONNECT, FCGI_BEGIN, CGI_PARAMS, CGI_END_PARAMS, CGI_STDIN, CGI_END_STDIN, CGI_STDOUT,
-};
-enum CGI_TYPE { NONE = 1, CGI, PHPCGI, PHPFPM, FASTCGI, SCGI, };
-enum CGI_DIR { CGI_IN, CGI_OUT };
-enum CGI_STATUS { FCGI_READ_HEADER, READ_HEADERS, SEND_HEADERS, READ_CONTENT, READ_ERROR, READ_PADDING, FCGI_CLOSE };
+enum SOURCE_ENTITY { ENTITY_NONE, FROM_FILE, FROM_DATA_BUFFER, };
+enum OPERATION_TYPE { READ_REQUEST, SEND_RESP_HEADERS, SEND_ENTITY, DYN_PAGE, };
 enum POLL_STATUS { WAIT, WORK };
+
+enum CGI_TYPE { CGI_TYPE_NONE, CGI, PHPCGI, PHPFPM, FASTCGI, SCGI, };
+enum DIRECT { FROM_CGI, TO_CGI, FROM_CLIENT, TO_CLIENT };
+
+enum CGI_STATUS  { CGI_CREATE_PROC, CGI_STDIN, CGI_READ_HTTP_HEADERS, CGI_SEND_HTTP_HEADERS, CGI_SEND_ENTITY };
+enum FCGI_STATUS { FASTCGI_CONNECT, FASTCGI_BEGIN, FASTCGI_PARAMS, FASTCGI_STDIN,
+               FASTCGI_READ_HEADER, FASTCGI_READ_HTTP_HEADERS, FASTCGI_SEND_HTTP_HEADERS, FASTCGI_SEND_ENTITY,  
+               FASTCGI_READ_ERROR, FASTCGI_READ_PADDING, FASTCGI_CLOSE };
 
 typedef struct fcgi_list_addr {
     std::wstring scrpt_name;
     std::wstring addr;
     struct fcgi_list_addr* next = NULL;
 } fcgi_list_addr;
+
+struct Param
+{
+    String name;
+    String val;
+};
 
 void print_err(const char* format, ...);
 //----------------------------------------------------------------------
@@ -103,17 +109,15 @@ struct Config
     int NumChld = 1;
     int MaxThreads = 18;
     int MinThreads = 6;
+    unsigned int MaxCgiProc = 10;
 
     int ListenBacklog = 128;
-
     int MaxRequests = 512;
-
-    int MaxEventSock = 100;
 
     int MaxRequestsPerClient = 50;
     int TimeoutKeepAlive = 5;
     int TimeOut = 30;
-    int TimeOutCGI = 5;
+    int TimeoutCGI = 5;
     int TimeoutPoll = 100;
 
     std::wstring wLogDir = L"";
@@ -156,16 +160,17 @@ struct hdr {
     int len;
 };
 
+union STATUS { CGI_STATUS cgi; FCGI_STATUS fcgi;};
 struct Cgi
 {
     PIPENAMED Pipe;
 
-    char* bufEnv;
+    char *bufEnv;
     size_t sizeBufEnv;
     size_t lenEnv;
         
-    CGI_STATUS status;
-    CGI_DIR dir;
+    STATUS status;
+    DIRECT dir;
     char buf[8 + 4096 + 8];
     int  size_buf = 4096;
     long len_buf;
@@ -187,8 +192,8 @@ public:
 
     SOCKET serverSocket;
 
-    unsigned int numReq, numConn;
-    int       numChld;
+    unsigned int numChld, numReq, numConn;
+
     SOCKET    clientSocket;
     int       err;
     __time64_t sock_timer;
@@ -222,7 +227,7 @@ public:
 
     int  reqMethod;
     
-    const wchar_t* wScriptName;
+    std::wstring wScriptName;
     
     const char* sReqParam;
     char* sRange;
@@ -264,8 +269,24 @@ public:
         const char* p;
         int len;
     } html;
-    
+
     Cgi cgi;
+
+    struct
+    {
+        bool http_headers_received;
+        int fd;
+
+        int i_param;
+        int size_par;
+        std::vector <Param> vPar;
+
+        unsigned char fcgi_type;
+        int dataLen;
+        int paddingLen;
+        char *ptr_header;
+        int len_header;
+    } fcgi;
     
     SOURCE_ENTITY source_entity;
     MODE_SEND mode_send;
@@ -278,7 +299,7 @@ public:
         long long fileSize;
         int  countRespHeaders = 0;
 
-        int scriptType;
+        CGI_TYPE scriptType;
 
         int  numPart;
         int  fd;
@@ -317,7 +338,7 @@ public:
         resp.numPart = 0;
         resp.send_bytes = 0LL;
         resp.respContentType = NULL;
-        resp.scriptType = 0;
+        resp.scriptType = CGI_TYPE_NONE;
         resp.countRespHeaders = 0;
         resp.sTime = "";
         hdrs = "";
@@ -389,7 +410,13 @@ const char* content_type(const wchar_t* path);
 int parse_startline_request(Connect* req, char* s, int len);
 int parse_headers(Connect* req, char* s, int len);
 void path_correct(std::wstring& path);
-//---------------------------------------------------------------------
+
+const char *get_str_operation(OPERATION_TYPE n);
+const char *get_cgi_status(CGI_STATUS n);
+const char *get_fcgi_status(FCGI_STATUS n);
+const char *get_cgi_type(CGI_TYPE n);
+const char *get_cgi_dir(DIRECT n);
+//----------------------------------------------------------------------
 int utf16_to_utf8(const std::wstring& ws, std::string& s);
 int utf16_to_utf8(const std::wstring& ws, String& s);
 int utf8_to_utf16(const char* u8, std::wstring& ws);
@@ -397,17 +424,14 @@ int utf8_to_utf16(const std::string& u8, std::wstring& ws);
 int utf8_to_utf16(const String& u8, std::wstring& ws);
 int decode(const char* s_in, size_t len_in, char* s_out, int len);
 std::string encode(const std::string& s_in);
-//---------------------------------------------------------------------
+//----------------------------------------------------------------------
 int send_message(Connect* req, const char* msg);
 int create_response_headers(Connect* req);
 int send_response_headers(Connect* req);
 
-int read_timeout(SOCKET sock, char* buf, int len, int timeout);
 int write_timeout(SOCKET sock, const char* buf, size_t len, int timeout);
 int send_file_1(SOCKET sock, int fd_in, char* buf, int* size, long long offset, long long* cont_len);
 int send_file_2(SOCKET sock, int fd_in, char* buf, int size);
-
-int read_line_sock(SOCKET sock, char* buf, int size, int timeout);
 //----------------------------------------------------------------------
 void open_logfiles(HANDLE, HANDLE);
 void print_err(Connect* req, const char* format, ...);

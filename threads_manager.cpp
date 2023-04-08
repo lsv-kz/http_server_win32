@@ -227,6 +227,8 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
     unsigned long allConn = 0;
     RequestManager* ReqMan;
 
+    setbuf(stderr, NULL);
+
     if (!SetConsoleCtrlHandler(childSigHandler, TRUE))
     {
         fprintf(stderr, "\nERROR: Could not set control handler\n");
@@ -305,6 +307,8 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         print_err("<%s:%d> Error create thread %d\n", __func__, __LINE__, allNumThr);
         exit(1);
     }
+
+    fprintf(stderr, "[%u] +++++ num threads=%u, pid=%u +++++\n", numChld, ReqMan->get_num_thr(), getpid());
 
     while (1)
     {

@@ -52,7 +52,7 @@ int index_dir(Connect* r, wstring & path)
 
     vector <string> vecDirs;
     vector <struct stFile> vecFiles;
-   
+
     path += L"/*";
     hFind = FindFirstFileW(path.c_str(), &ffd);
     if (INVALID_HANDLE_VALUE == hFind)

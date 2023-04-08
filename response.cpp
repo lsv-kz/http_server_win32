@@ -149,8 +149,10 @@ int fastcgi(Connect* req, const wchar_t* wPath)
 
     if (!i)
         return -RS404;
-
-    return -RS404;
+    req->resp.scriptType = FASTCGI;
+    req->wScriptName = i->scrpt_name.c_str();
+    push_cgi(req);
+    return 1;
 }
 //======================================================================
 int response2(RequestManager* ReqMan, Connect* req)
@@ -169,7 +171,7 @@ int response2(RequestManager* ReqMan, Connect* req)
             return -RS404;
         }
 
-        req->wScriptName = req->wDecodeUri.c_str();
+        req->wScriptName = req->wDecodeUri;
         if (conf->usePHP == "php-cgi")
         {
             req->resp.scriptType = PHPCGI;
@@ -178,14 +180,16 @@ int response2(RequestManager* ReqMan, Connect* req)
         }
         else if (conf->usePHP == "php-fpm")
         {
-            return -RS404;
+            req->resp.scriptType = PHPFPM;
+            push_cgi(req);
+            return 1;
         }
     }
 
     if (!strncmp(req->decodeUri, "/cgi-bin/", 9)
         || !strncmp(req->decodeUri, "/cgi/", 5))
     {
-        req->wScriptName = req->wDecodeUri.c_str();
+        req->wScriptName = req->wDecodeUri;
         req->resp.scriptType = CGI;
         push_cgi(req);
         return 1;
@@ -201,15 +205,14 @@ int response2(RequestManager* ReqMan, Connect* req)
     struct _stati64 st64;
     if (_wstati64(wPath.c_str(), &st64) == -1)
     {
-        /*int ret = fastcgi(req, req->wDecodeUri.c_str());
+        int ret = fastcgi(req, req->wDecodeUri.c_str());
         if (ret < 0)
         {
             String sTmp;
             utf16_to_utf8(req->wDecodeUri, sTmp);
             print_err(req, "<%s:%d> Error not found (%d) [%s]\n", __func__, __LINE__, ret, sTmp.c_str());
         }
-        return ret;*/
-        return -RS404;
+        return ret;
     }
     else
     {
@@ -280,9 +283,7 @@ int response2(RequestManager* ReqMan, Connect* req)
                 if (_wstat(wPath.c_str(), &st) == 0)
                 {
                     int ret;
-                    wstring s = req->wDecodeUri;
-                    s += L"index.php";
-                    req->wScriptName = s.c_str();
+                    req->wScriptName = req->wDecodeUri + L"index.php";
                     if (conf->usePHP == "php-fpm")
                     {
                         //req->resp.scriptType = PHPFPM;
@@ -297,7 +298,7 @@ int response2(RequestManager* ReqMan, Connect* req)
                     else
                         ret = -1;
 
-                    req->wScriptName = NULL;
+                    req->wScriptName = L"";
                     return ret;
                 }
                 wPath.resize(len);

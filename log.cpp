@@ -71,7 +71,7 @@ void open_logfiles(HANDLE h, HANDLE hErr)
 void print_err(const char* format, ...)
 {
     va_list ap;
-    char buf[256];
+    char buf[300];
 
     va_start(ap, format);
     vsnprintf(buf, sizeof(buf), format, ap);
