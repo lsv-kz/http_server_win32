@@ -21,7 +21,7 @@ int PrintError(const char* f, int line, const char* s)
 
     if (lpMsgBuf)
     {
-        print_err("<%s:%d> %s: (%d)%s", f, line, s, err, (char*)lpMsgBuf);
+        print_err("<%s:%d> %s: (%ld)%s", f, line, s, err, (char*)lpMsgBuf);
         LocalFree(lpMsgBuf);
     }
     return err;
@@ -594,6 +594,27 @@ const char *get_fcgi_status(FCGI_STATUS n)
             return "FASTCGI_READ_PADDING";
         case FASTCGI_CLOSE:
             return "FASTCGI_CLOSE";
+    }
+
+    return "?";
+}
+//======================================================================
+const char *get_scgi_status(SCGI_STATUS n)
+{
+    switch (n)
+    {
+        case SCGI_CONNECT:
+            return "SCGI_CONNECT";
+        case SCGI_PARAMS:
+            return "SCGI_PARAMS";
+        case SCGI_STDIN:
+            return "SCGI_STDIN";
+        case SCGI_READ_HTTP_HEADERS:
+            return "SCGI_READ_HTTP_HEADERS";
+        case SCGI_SEND_HTTP_HEADERS:
+            return "SCGI_SEND_HTTP_HEADERS";
+        case SCGI_SEND_ENTITY:
+            return "SCGI_SEND_ENTITY";
     }
 
     return "?";

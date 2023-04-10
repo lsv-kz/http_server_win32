@@ -22,7 +22,7 @@ const int requestId = 1;
 extern struct pollfd *cgi_poll_fd;
 extern Connect **cgi_poll_array;
 
-int get_sock_fcgi(Connect *r, const char *script);
+int get_sock_fcgi(Connect *r, const wchar_t *script);
 void cgi_del_from_list(Connect *r);
 int cgi_set_size_chunk(Connect *r);
 int cgi_find_empty_line(Connect *req);
@@ -201,7 +201,7 @@ int get_sock_fcgi(Connect* req, const wchar_t* script)
 
     for (; ps; ps = ps->next)
     {
-        if (!wcscmp(script, ps->scrpt_name.c_str()))
+        if (!wcscmp(script, ps->script_name.c_str()))
             break;
     }
 
@@ -326,27 +326,11 @@ void fcgi_create_param(Connect *req)
     param.val = req->uri;
     req->fcgi.vPar.push_back(param);
     ++i;
-/*
-    param.name = "DOCUMENT_URI";
-    param.val = req->decodeUri;
+
+    param.name = "REQUEST_METHOD";
+    param.val = get_str_method(req->reqMethod);
     req->fcgi.vPar.push_back(param);
     ++i;
-*/
-    /*if (req->reqMethod == M_HEAD)
-    {
-print_err(req, "<%s:%d> ---------M_HEAD--------\n", __func__, __LINE__);
-        param.name = "REQUEST_METHOD";
-        param.val = get_str_method(M_GET);
-        req->fcgi.vPar.push_back(param);
-        ++i;
-    }
-    else*/
-    {
-        param.name = "REQUEST_METHOD";
-        param.val = get_str_method(req->reqMethod);
-        req->fcgi.vPar.push_back(param);
-        ++i;
-    }
 
     param.name = "SERVER_PROTOCOL";
     param.val = get_str_http_prot(req->httpProt);
@@ -1075,6 +1059,7 @@ void fcgi_(Connect* r)
                         {
                             r->timeout = conf->TimeoutCGI;
                             r->cgi.status.fcgi = FASTCGI_READ_HTTP_HEADERS;
+                            r->cgi.dir = FROM_CGI;
                         }
                     }
                     break;

@@ -153,10 +153,13 @@ int find_bracket(ifstream& fi)
     return 0;
 }
 //======================================================================
-void create_fcgi_list(fcgi_list_addr** l, const String& s1, const String& s2)
+void create_fcgi_list(fcgi_list_addr** l, const String& s1, const String& s2, int type)
 {
     if (l == NULL)
-        fprintf(stderr, "<%s:%d> Error pointer = NULL\n", __func__, __LINE__), exit(errno);
+    {
+        fprintf(stderr, "<%s:%d> Error pointer = NULL\n", __func__, __LINE__);
+        exit(errno);
+    }
 
     fcgi_list_addr* t;
     try
@@ -168,14 +171,16 @@ void create_fcgi_list(fcgi_list_addr** l, const String& s1, const String& s2)
         fprintf(stderr, "<%s:%d> Error malloc()\n", __func__, __LINE__);
         exit(errno);
     }
-    
+
     t->next = NULL;
     wstring stmp;
     utf8_to_utf16(s1.c_str(), stmp);
-    t->scrpt_name = stmp;
+    t->script_name = stmp;
 
     utf8_to_utf16(s2.c_str(), stmp);
     t->addr = stmp;
+
+    t->type = type;
 
     t->next = *l;
     *l = t;
@@ -336,7 +341,30 @@ int read_conf_file(const char* path_conf)
                     ss >> s1;
                     ss >> s2;
 
-                    create_fcgi_list(&c.fcgi_list, s1, s2);
+                    create_fcgi_list(&c.fcgi_list, s1, s2, FASTCGI);
+                }
+
+                if (ss.str() != "}")
+                {
+                    fprintf(stderr, "<%s:%d> Error not found \"}\", line %d\n", __func__, __LINE__, line_);
+                    exit(1);
+                }
+            }
+            else if (ss == "scgi")
+            {
+                if (find_bracket(fconf) == 0)
+                {
+                    fprintf(stderr, "<%s:%d> Error Error not found \"{\", line %d\n", __func__, __LINE__, line_);
+                    exit(1);
+                }
+
+                while (getLine(fconf, ss) == 2)
+                {
+                    String s1, s2;
+                    ss >> s1;
+                    ss >> s2;
+
+                    create_fcgi_list(&c.fcgi_list, s1, s2, SCGI);
                 }
 
                 if (ss.str() != "}")
@@ -363,7 +391,7 @@ int read_conf_file(const char* path_conf)
     fcgi_list_addr* i = c.fcgi_list;
     for (; i; i = i->next)
     {
-        wcerr << L"   [" << i->scrpt_name.c_str() << L"] = [" << i->addr.c_str() << L"]\n";
+        wcerr << L"   [" << i->script_name.c_str() << L"] = [" << i->addr.c_str() << L"]\n";
     }*/
     //-------------------------log_dir--------------------------------------
     if (check_path(c.wLogDir) == -1)

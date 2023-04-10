@@ -135,22 +135,29 @@ int fastcgi(Connect* req, const wchar_t* wPath)
     fcgi_list_addr* i = conf->fcgi_list;
     for (; i; i = i->next)
     {
-        if (i->scrpt_name[0] == L'~')
+        if (i->script_name[0] == L'~')
         {
-            if (!wcscmp(p, i->scrpt_name.c_str() + 1))
+            if (!wcscmp(p, i->script_name.c_str() + 1))
                 break;
         }
         else
         {
-            if (i->scrpt_name == wPath)
+            if (i->script_name == wPath)
                 break;
         }
     }
 
     if (!i)
         return -RS404;
-    req->resp.scriptType = FASTCGI;
-    req->wScriptName = i->scrpt_name.c_str();
+
+    if (i->type == FASTCGI)
+        req->resp.scriptType = FASTCGI;
+    else if (i->type == SCGI)
+        req->resp.scriptType = SCGI;
+    else
+        return -RS404;
+
+    req->wScriptName = i->script_name;
     push_cgi(req);
     return 1;
 }

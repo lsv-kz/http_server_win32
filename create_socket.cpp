@@ -37,10 +37,11 @@ SOCKET create_server_socket(const Config * conf)
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = PF_INET;
 
-    //	sin.sin_addr.s_addr = INADDR_ANY;
+    //  sin.sin_addr.s_addr = INADDR_ANY;
     if (in4_aton(conf->ServerAddr.c_str(), &(sin.sin_addr)) != 4)
     {
         print_err("<%s:%d> Error in4_aton()\n", __func__, __LINE__);
+        getchar();
         return INVALID_SOCKET;
     }
     sin.sin_port = htons(port);
@@ -50,7 +51,7 @@ SOCKET create_server_socket(const Config * conf)
     {
         print_err("<%s:%d> Error socket(): %d\n", __func__, __LINE__, WSAGetLastError());
         WSACleanup();
-        system("PAUSE");
+        getchar();
         return INVALID_SOCKET;
     }
 
@@ -58,8 +59,9 @@ SOCKET create_server_socket(const Config * conf)
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (char*)& sock_opt, sizeof(sock_opt)) == SOCKET_ERROR)
     {
         print_err("<%s:%d> Error setsockopt(): %d\n", __func__, __LINE__, WSAGetLastError());
+        closesocket(sockfd);
         WSACleanup();
-        system("PAUSE");
+        getchar();
         return INVALID_SOCKET;
     }
 
@@ -67,8 +69,9 @@ SOCKET create_server_socket(const Config * conf)
     if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char*)& sock_opt, sizeof(sock_opt)) == SOCKET_ERROR)
     {
         print_err("<%s:%d> Error setsockopt(): %d\n", __func__, __LINE__, WSAGetLastError());
+        closesocket(sockfd);
         WSACleanup();
-        system("PAUSE");
+        getchar();
         return INVALID_SOCKET;
     }
 
@@ -77,7 +80,7 @@ SOCKET create_server_socket(const Config * conf)
         print_err("<%s:%d> Error bind(): %d\n", __func__, __LINE__, WSAGetLastError());
         closesocket(sockfd);
         WSACleanup();
-        system("PAUSE");
+        getchar();
         return INVALID_SOCKET;
     }
 
@@ -86,7 +89,7 @@ SOCKET create_server_socket(const Config * conf)
         print_err("<%s:%d> Error listen(): %d\n", __func__, __LINE__, WSAGetLastError());
         closesocket(sockfd);
         WSACleanup();
-        system("PAUSE");
+        getchar();
         return INVALID_SOCKET;
     }
 

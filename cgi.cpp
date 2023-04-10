@@ -39,6 +39,12 @@ void fcgi_create_param(Connect *req);
 void fcgi_set_poll_list(Connect *r, int *i);
 void fcgi_(Connect* r);
 int timeout_fcgi(Connect *r);
+
+void scgi_set_poll_list(Connect *r, int *i);
+void scgi_(Connect* r);
+int timeout_scgi(Connect *r);
+int scgi_create_connect(Connect *req);
+int timeout_scgi(Connect *r);
 //======================================================================
 wstring cgi_script_file(const wstring& name)
 {
@@ -142,7 +148,8 @@ void cgi_del_from_list(Connect *r)
         }
     }
     else if ((r->resp.scriptType == PHPFPM) || 
-                (r->resp.scriptType == FASTCGI))
+             (r->resp.scriptType == FASTCGI) ||
+             (r->resp.scriptType == SCGI))
     {
         if (r->fcgi.fd > 0)
         {
@@ -212,6 +219,16 @@ mtx_.lock();
                 }
 
                 fcgi_create_param(r);
+            }
+            else if (r->resp.scriptType == SCGI)
+            {
+                int ret = scgi_create_connect(r);
+                if (ret < 0)
+                {
+                    r->err = ret;
+                    end_response(r);
+                    continue;
+                }
             }
             //--------------------------
             if (work_list_end)
@@ -316,14 +333,16 @@ static void cgi_set_poll_list(int *nsock, int *npipe)
 
         if (((t - r->sock_timer) >= r->timeout) && (r->sock_timer != 0))
         {
-            print_err(r, "<%s:%d> Timeout = %llu, stat=%s, dir=%s, type=%s\n", 
+            print_err(r, "<%s:%d> Timeout = %llu, dir=%s, type=%s\n", 
                 __func__, __LINE__, t - r->sock_timer, 
-                get_cgi_status(r->cgi.status.cgi), get_cgi_dir(r->cgi.dir), get_cgi_type(r->resp.scriptType));
+                get_cgi_dir(r->cgi.dir), get_cgi_type(r->resp.scriptType));
 
             if ((r->resp.scriptType == CGI) || (r->resp.scriptType == PHPCGI))
                 r->err = timeout_cgi(r);
             else if ((r->resp.scriptType == PHPFPM) || (r->resp.scriptType == FASTCGI))
-                r->err = timeout_cgi(r);
+                r->err = timeout_fcgi(r);
+            else if (r->resp.scriptType == SCGI)
+                r->err = timeout_scgi(r);
             else
                 r->err = -1;
             r->req_hdrs.iReferer = MAX_HEADERS - 1;
@@ -347,8 +366,8 @@ static void cgi_set_poll_list(int *nsock, int *npipe)
                     fcgi_set_poll_list(r, nsock);
                     break;
                 case SCGI:
-                    //scgi_set_poll_list(r, &i);
-                    //break;
+                    scgi_set_poll_list(r, nsock);
+                    break;
                 default:
                     print_err(r, "<%s:%d> ??? cgi.scriptType=%d\n", __func__, __LINE__, r->resp.scriptType);
                     r->err = -RS500;
@@ -446,12 +465,12 @@ static void cgi_(Connect* r)
                                     return;
                                 }
 
-                                memmove(r->cgi.buf + 8, r->tail, r->lenTail);
-                                r->cgi.len_buf = r->lenTail;
-                                r->tail = NULL;
-                                r->lenTail = 0;
                                 if (r->mode_send == CHUNK)
                                 {
+                                    memmove(r->cgi.buf + 8, r->tail, r->lenTail);
+                                    r->cgi.len_buf = r->lenTail;
+                                    r->tail = NULL;
+                                    r->lenTail = 0;
                                     if (cgi_set_size_chunk(r))
                                     {
                                         r->err = -1;
@@ -461,7 +480,13 @@ static void cgi_(Connect* r)
                                     }
                                 }
                                 else
-                                    r->cgi.p = r->cgi.buf + 8;
+                                {
+                                    r->cgi.p = r->tail;
+                                    r->cgi.len_buf = r->lenTail;
+                                    r->tail = NULL;
+                                    r->lenTail = 0;
+                                }
+
                                 r->cgi.dir = TO_CLIENT;
                                 r->timeout = conf->TimeOut;
                             }
@@ -574,8 +599,8 @@ static int cgi_poll(int num_chld, int nfd, RequestManager *ReqMan)
                         cgi_del_from_list(r);
                         end_response(r);
                         break;
-                    /*case SCGI:
-                        if ((r->cgi.status.cgi == SCGI_SEND_ENTITY) && (r->cgi.dir == FROM_CGI))
+                    case SCGI:
+                        if ((r->cgi.status.scgi == SCGI_SEND_ENTITY) && (r->cgi.dir == FROM_CGI))
                         {
                             if (r->mode_send == CHUNK)
                             {
@@ -594,44 +619,33 @@ static int cgi_poll(int num_chld, int nfd, RequestManager *ReqMan)
                         }
                         else
                         {
-                            print_err(r, "<%s:%d> Error: events=0x%x(0x%x), send_bytes=%lld\n", 
-                                    __func__, __LINE__, cgi_poll_fd[i].events, cgi_poll_fd[i].revents, 
-                                    r->resp.send_bytes);
-                            if ((r->cgi.status.cgi <= CGI_READ_HTTP_HEADERS) && 
-                                ((r->cgi.dir == FROM_CGI) || (r->cgi.dir == TO_CGI)))
-                            {
-                                r->req_hdrs.iReferer = MAX_HEADERS - 1;
-                                r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
+                            print_err(r, "<%s:%d> Error: events=0x%x(0x%x), status=%s\n", __func__, __LINE__,  
+                                   cgi_poll_fd[i].events, cgi_poll_fd[i].revents, get_scgi_status(r->cgi.status.scgi));
+
+                            if (r->cgi.status.scgi <= SCGI_READ_HTTP_HEADERS)
                                 r->err = -RS502;
-                            }
                             else
                                 r->err = -1;
+
                             cgi_del_from_list(r);
                             end_response(r);
                         }
-                        break;*/
+                        break;
                     case PHPFPM:
                     case FASTCGI:
-                        if (cgi_poll_fd[i].fd == r->clientSocket)
-                        {
-                            print_err(r, "<%s:%d> Error: events=0x%x(0x%x), status=%d\n", 
-                                    __func__, __LINE__, cgi_poll_fd[i].events, cgi_poll_fd[i].revents, r->cgi.status.fcgi);
-                            r->req_hdrs.iReferer = MAX_HEADERS - 1;
-                            r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
-                            r->err = -1;
-                        }
+                        print_err(r, "<%s:%d> Error: events=0x%x(0x%x), status=%s\n", __func__, __LINE__, 
+                                cgi_poll_fd[i].events, cgi_poll_fd[i].revents, get_fcgi_status(r->cgi.status.fcgi));
+
+                        if (r->cgi.status.fcgi <= FASTCGI_READ_HTTP_HEADERS)
+                            r->err = -RS502;
                         else
-                        {
-                            if (r->cgi.status.fcgi <= FASTCGI_READ_HTTP_HEADERS)
-                                r->err = -RS502;
-                            else
-                                r->err = -1;
-                        }
+                            r->err = -1;
+
                         cgi_del_from_list(r);
                         end_response(r);
                         break;
                     default:
-                        print_err(r, "<%s:%d> ??? cgi.scriptType=%d\n", __func__, __LINE__, r->resp.scriptType);
+                        print_err(r, "<%s:%d> ??? cgi.scriptType=%s\n", __func__, __LINE__, get_cgi_type(r->resp.scriptType));
                         r->err = -1;
                         cgi_del_from_list(r);
                         end_response(r);
@@ -667,10 +681,10 @@ static void cgi_worker(int num_chld, RequestManager *ReqMan)
         {
             fcgi_(r);
         }
-        /*else if (r->resp.scriptType == SCGI)
+        else if (r->resp.scriptType == SCGI)
         {
             scgi_(r);
-        }*/
+        }
         else
         {
             print_err(r, "<%s:%d> ??? Error operation=%d\n", __func__, __LINE__, r->operation);
@@ -818,9 +832,36 @@ int cgi_stdin(Connect *r)
             r->sock_timer = 0;
             return 0;
         }
+        else if (r->resp.scriptType == SCGI)
+        {
+            int n = send(r->fcgi.fd, r->cgi.p, r->cgi.len_buf, 0);
+            if (n == -1)
+            {
+                print_err(r, "<%s:%d> Error write(): %s\n", __func__, __LINE__, strerror(errno));
+                return -1;
+            }
+            
+            r->cgi.p += n;
+            r->cgi.len_buf -= n;
+            if (r->cgi.len_buf == 0)
+            {
+                if (r->cgi.len_post == 0)
+                {
+                    r->cgi.status.scgi = SCGI_READ_HTTP_HEADERS;
+                    r->tail = NULL;
+                    r->lenTail = 0;
+                    r->p_newline = r->cgi.p = r->cgi.buf + 8;
+                    r->cgi.len_buf = 0;
+                    r->timeout = conf->TimeoutCGI;
+                }
+                else
+                    r->cgi.dir = FROM_CLIENT;
+            }
+        }
         else
         {
-            print_err(r, "<%s:%d> ??? scriptType=%d\n", __func__, __LINE__, r->resp.scriptType);
+            print_err(r, "<%s:%d> ??? Error: CGI_TYPE=%s\n", 
+                __func__, __LINE__, get_cgi_type(r->resp.scriptType));
             return -1;
         }
     }
@@ -1006,7 +1047,7 @@ int cgi_read_hdrs(Connect *r)
         if (len_read > PIPE_BUFSIZE)
             len_read = PIPE_BUFSIZE;
         DWORD read_bytes;
-        int ret = ReadPipe(r, r->cgi.buf + r->cgi.len_buf, len_read, &read_bytes, PIPE_BUFSIZE, TimeoutPipe);
+        int ret = ReadPipe(r, r->cgi.p, len_read, &read_bytes, PIPE_BUFSIZE, TimeoutPipe);
         if (ret < 0)
         {
             if (ret == -WAIT_TIMEOUT)
@@ -1022,7 +1063,8 @@ int cgi_read_hdrs(Connect *r)
         {
             r->lenTail += read_bytes;
             r->cgi.len_buf += read_bytes;
-            r->cgi.buf[r->cgi.len_buf] = 0;
+            r->cgi.p += read_bytes;
+            *(r->cgi.p) = 0;
             ret = cgi_find_empty_line(r);
             if (ret == 1) // empty line found
                 return r->cgi.len_buf;
@@ -1124,7 +1166,8 @@ void timeout_pipe()
                 {
                     r->lenTail += ready_bytes;
                     r->cgi.len_buf += ready_bytes;
-                    r->cgi.buf[r->cgi.len_buf] = 0;
+                    r->cgi.p += ready_bytes;
+                    *(r->cgi.p) = 0;
                     int n = cgi_find_empty_line(r);
                     if (n == 1) // empty line found
                     {
@@ -1223,9 +1266,10 @@ void timeout_pipe()
 void cgi_set_status_readheaders(Connect *r)
 {
     r->cgi.status.cgi = CGI_READ_HTTP_HEADERS;
+    r->cgi.dir = FROM_CGI;
     r->tail = NULL;
     r->lenTail = 0;
-    r->p_newline = r->cgi.buf;
+    r->p_newline = r->cgi.p = r->cgi.buf + 8;
     r->cgi.len_buf = 0;
     r->cgi.buf[0] = 0;
     r->timeout = conf->TimeoutCGI;

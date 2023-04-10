@@ -17,6 +17,7 @@ OBJS = $(OBJSDIR)/server.o \
 	$(OBJSDIR)/event_handler.o \
 	$(OBJSDIR)/cgi.o \
 	$(OBJSDIR)/fcgi.o \
+	$(OBJSDIR)/scgi.o \
 	$(OBJSDIR)/index.o \
 
 server.exe: $(OBJS)
@@ -65,6 +66,9 @@ $(OBJSDIR)/cgi.o: cgi.cpp main.h classes.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJSDIR)/fcgi.o: fcgi.cpp main.h classes.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJSDIR)/scgi.o: scgi.cpp main.h classes.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJSDIR)/index.o: index.cpp main.h
