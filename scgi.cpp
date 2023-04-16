@@ -422,7 +422,11 @@ void scgi_(Connect* r)
     if (r->cgi.status.scgi == SCGI_PARAMS)
     {
         int ret = write_to_fcgi(r);
-        if (ret == -1)
+        if (ret == -WSAENOTCONN)
+        {
+            return;
+        }
+        else if (ret < 0)
         {
             r->err = -RS502;
             cgi_del_from_list(r);
@@ -445,11 +449,11 @@ void scgi_(Connect* r)
         if (r->cgi.status.scgi == SCGI_READ_HTTP_HEADERS)
         {
             int ret = scgi_read_hdrs(r);
-            if (ret == -EAGAIN)
+            if (ret == -WSAEWOULDBLOCK)
                 r->sock_timer = 0;
-            if (ret < 0)
+            else if (ret < 0)
             {
-                fprintf(stderr, "<%s:%d> Error cgi_read_hdrs()\n", __func__, __LINE__);
+                fprintf(stderr, "<%s:%d> Error cgi_read_hdrs()=%d\n", __func__, __LINE__, ret);
                 r->err = -RS502;
                 cgi_del_from_list(r);
                 end_response(r);
@@ -603,7 +607,9 @@ int scgi_read_hdrs(Connect *r)
     int n = recv(r->fcgi.fd, r->cgi.p, num_read, 0);
     if (n == SOCKET_ERROR)
     {
-        ErrorStrSock(__func__, __LINE__, "Error recv()");
+        int err = GetLastError();
+        if (err == WSAEWOULDBLOCK)
+            return -WSAEWOULDBLOCK;
         r->err = -RS502;
         return -1;
     }

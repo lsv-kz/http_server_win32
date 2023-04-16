@@ -703,8 +703,8 @@ int write_to_fcgi(Connect* r)
     int ret = send(r->fcgi.fd, r->cgi.p, r->cgi.len_buf, 0);
     if (ret == SOCKET_ERROR)
     {
-        ErrorStrSock(__func__, __LINE__, "Error send()");
-        return -1;
+        int err = GetLastError();
+        return -err;
     }
     else
     {
@@ -975,7 +975,9 @@ void fcgi_(Connect* r)
                 r->cgi.status.fcgi = FASTCGI_PARAMS;
             }
         }
-        else if (ret == -1)
+        else if (ret == -WSAENOTCONN)
+            return;
+        else if (ret < 0)
         {
             r->err = -RS502;
             cgi_del_from_list(r);
@@ -998,7 +1000,9 @@ void fcgi_(Connect* r)
                     r->cgi.len_post = 0;
             }
         }
-        else if (ret == -1)
+        else if (ret == -WSAEWOULDBLOCK)
+            return;
+        else if (ret < 0)
         {
             r->err = -RS502;
             cgi_del_from_list(r);
