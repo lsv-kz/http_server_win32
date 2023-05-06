@@ -6,6 +6,9 @@ int write_timeout(SOCKET sock, const char* buf, size_t len, int timeout)
 {
     WSAPOLLFD writefds;
     int ret, write_bytes = 0;
+    
+    if (len == 0)
+        return -1;
 
     writefds.fd = sock;
     writefds.events = POLLWRNORM;
@@ -33,7 +36,9 @@ int write_timeout(SOCKET sock, const char* buf, size_t len, int timeout)
         ret = send(sock, buf, (int)len, 0);
         if (ret == SOCKET_ERROR)
         {
-            ErrorStrSock(__func__, __LINE__, "Error send()");
+            int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                if (err == WSAEWOULDBLOCK)
+            return TRYAGAIN;
             return -1;
         }
 
@@ -74,8 +79,10 @@ int send_file_1(SOCKET sock, int fd_in, char* buf, int* size, long long offset, 
         }
 
         wr = write_timeout(sock, buf, rd, conf->TimeOut);
-        if (wr <= 0)
+        if (wr < 0)
         {
+            if (wr == TRYAGAIN)
+                return TRYAGAIN;
             print_err("<%s:%d> Error write_to_sock()=%d\n", __func__, __LINE__, wr);
             ret = -1;
             break;
@@ -90,8 +97,8 @@ int send_file_1(SOCKET sock, int fd_in, char* buf, int* size, long long offset, 
 int send_file_2(SOCKET sock, int fd_in, char* buf, int size)
 {
     int rd, wr;
-    errno = 0;
-
+    if (size <= 0)
+        return -1;
     rd = _read(fd_in, buf, size);
     if (rd <= 0)
     {
@@ -105,7 +112,9 @@ int send_file_2(SOCKET sock, int fd_in, char* buf, int size)
     wr = send(sock, buf, rd, 0);
     if (wr == SOCKET_ERROR)
     {
-        ErrorStrSock(__func__, __LINE__, "Error send()");
+        int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+        if (err == WSAEWOULDBLOCK)
+            return TRYAGAIN;
         return -1;
     }
 
@@ -125,9 +134,14 @@ int Connect::hd_read()
     if (len <= 0)
         return -RS414;
     int n = recv(clientSocket, req.buf + req.len, len, 0);
-    if (n <= 0)
+    if (n == SOCKET_ERROR)
+    {
+        if (n == WSAEWOULDBLOCK)
+            return TRYAGAIN;
         return -1;
-
+    }
+    else if (n == 0)
+        return -1;
     lenTail += n;
     req.len += n;
     req.buf[req.len] = 0;

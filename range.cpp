@@ -1,7 +1,7 @@
-#include "classes.h"
+#include "range.h"
 
 //======================================================================
-int ArrayRanges::check_ranges()
+int Ranges::check_ranges()
 {
     int numPart, maxIndex, n;
     Range* r = range;
@@ -49,7 +49,7 @@ int ArrayRanges::check_ranges()
     return numPart;
 }
 //======================================================================
-int ArrayRanges::parse_ranges(char* sRange, String& ss)
+int Ranges::parse_ranges(char* sRange, String& ss)
 {
     char* p0 = sRange, * p;
     long long size = sizeFile;
@@ -125,7 +125,7 @@ int ArrayRanges::parse_ranges(char* sRange, String& ss)
     return numPart;
 }
 //======================================================================
-int ArrayRanges::create_ranges(char* s, long long sz)
+int Ranges::create_ranges(char* s, long long sz)
 {
     String ss(128);
     if (ss.error())

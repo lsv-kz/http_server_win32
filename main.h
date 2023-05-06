@@ -42,6 +42,8 @@ const int MAX_NAME = 256;
 const int SIZE_BUF_REQUEST = 8192;
 const int MAX_HEADERS = 25;
 const int BUF_TMP_SIZE = 10000;
+const char boundary[] = "----------a9b5r7a4c0a2d5a1b8r3a";
+const int TRYAGAIN = -1000;
 
 enum {
     RS101 = 101,
@@ -64,18 +66,18 @@ enum { EXIT_THR = 1 };
 enum MODE_SEND { NO_CHUNK, CHUNK, CHUNK_END };
 enum SOURCE_ENTITY { ENTITY_NONE, FROM_FILE, FROM_DATA_BUFFER, };
 enum OPERATION_TYPE { READ_REQUEST = 1, SEND_RESP_HEADERS, SEND_ENTITY, DYN_PAGE, };
-enum POLL_STATUS { WAIT = 1, WORK };
+enum IO_STATUS { POLL = 1, WAIT_PIPE, WORK };
 
 enum CGI_TYPE { CGI_TYPE_NONE, CGI, PHPCGI, PHPFPM, FASTCGI, SCGI, };
 enum DIRECT { FROM_CGI = 1, TO_CGI, FROM_CLIENT, TO_CLIENT };
 
 enum CGI_STATUS  { CGI_CREATE_PROC = 1, CGI_STDIN, CGI_READ_HTTP_HEADERS, CGI_SEND_HTTP_HEADERS, CGI_SEND_ENTITY };
 
-enum FCGI_STATUS { FASTCGI_CONNECT = 1, FASTCGI_BEGIN, FASTCGI_PARAMS, FASTCGI_STDIN,
+enum FCGI_STATUS { /*FASTCGI_CONNECT,*/ FASTCGI_BEGIN = 1, FASTCGI_PARAMS, FASTCGI_STDIN,
                FASTCGI_READ_HEADER, FASTCGI_READ_HTTP_HEADERS, FASTCGI_SEND_HTTP_HEADERS, FASTCGI_SEND_ENTITY,  
                FASTCGI_READ_ERROR, FASTCGI_READ_PADDING, FASTCGI_CLOSE };
 
-enum SCGI_STATUS { SCGI_CONNECT = 1, SCGI_PARAMS, SCGI_STDIN, SCGI_READ_HTTP_HEADERS, SCGI_SEND_HTTP_HEADERS, SCGI_SEND_ENTITY, };
+enum SCGI_STATUS { /*SCGI_CONNECT,*/ SCGI_PARAMS = 1, SCGI_STDIN, SCGI_READ_HTTP_HEADERS, SCGI_SEND_HTTP_HEADERS, SCGI_SEND_ENTITY, };
 
 typedef struct fcgi_list_addr {
     std::wstring script_name;
@@ -204,7 +206,7 @@ public:
     int       timeout;
     short     event;
     OPERATION_TYPE operation;
-    POLL_STATUS    poll_status;
+    IO_STATUS    io_status;
 
     char remoteAddr[NI_MAXHOST];
     char remotePort[NI_MAXSERV];
@@ -288,7 +290,7 @@ public:
         unsigned char fcgi_type;
         int dataLen;
         int paddingLen;
-        char *ptr_header;
+        char buf[8];
         int len_header;
     } fcgi;
     

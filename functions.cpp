@@ -572,8 +572,6 @@ const char *get_fcgi_status(FCGI_STATUS n)
 {
     switch (n)
     {
-        case FASTCGI_CONNECT:
-            return "FASTCGI_CONNECT";
         case FASTCGI_BEGIN:
             return "FASTCGI_BEGIN";
         case FASTCGI_PARAMS:
@@ -603,8 +601,6 @@ const char *get_scgi_status(SCGI_STATUS n)
 {
     switch (n)
     {
-        case SCGI_CONNECT:
-            return "SCGI_CONNECT";
         case SCGI_PARAMS:
             return "SCGI_PARAMS";
         case SCGI_STDIN:
@@ -656,4 +652,37 @@ const char *get_cgi_dir(DIRECT n)
     }
 
     return "?";
+}
+
+
+//======================================================================
+void hex_dump_stderr(const char *s, int line, const void *p, int n)
+{
+    int count, addr = 0, col;
+    unsigned char *buf = (unsigned char*)p;
+    char str[18], str2[127];
+    String out;
+    out << "<" << s << ":" << line << ">--------------- HEX ---------------\n";
+    for(count = 0; count < n;)
+    {
+        snprintf(str2, sizeof(str2), "%08X  ", addr);
+        out << str2;
+        for(col = 0, addr = addr + 0x10; (count < n) && (col < 16); count++, col++)
+        {
+            if (col == 8)
+                out << " ";
+            snprintf(str2, sizeof(str2), "%02X ", *(buf + count));
+            out << str2;
+            str[col] = (*(buf + count) >= 32 && *(buf + count) < 127) ? *(buf + count) : '.';
+        }
+        str[col] = 0;
+        if (col <= 8)
+            out << " ";
+        snprintf(str2, sizeof(str2), "%*s  %s\n",(16 - (col)) * 3, "", str);
+        out << str2;
+    }
+    
+    snprintf(str2, sizeof(str2), "-----------------------------------------------------------\r\n");
+    out << str2;
+    print_err(out.c_str());
 }

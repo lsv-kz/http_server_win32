@@ -4,24 +4,24 @@ CC = g++.exe
 OBJSDIR = objs
 
 OBJS = $(OBJSDIR)/server.o \
+	$(OBJSDIR)/response.o \
+	$(OBJSDIR)/cgi.o \
+	$(OBJSDIR)/fcgi.o \
+	$(OBJSDIR)/scgi.o \
 	$(OBJSDIR)/config.o \
 	$(OBJSDIR)/create_socket.o \
 	$(OBJSDIR)/log.o \
 	$(OBJSDIR)/create_headers.o \
-	$(OBJSDIR)/response.o \
 	$(OBJSDIR)/range.o \
 	$(OBJSDIR)/encoding.o \
 	$(OBJSDIR)/functions.o \
 	$(OBJSDIR)/rd_wr.o \
 	$(OBJSDIR)/threads_manager.o \
 	$(OBJSDIR)/event_handler.o \
-	$(OBJSDIR)/cgi.o \
-	$(OBJSDIR)/fcgi.o \
-	$(OBJSDIR)/scgi.o \
 	$(OBJSDIR)/index.o \
 
 server.exe: $(OBJS)
-	$(CC) $(CFLAGS) -o $@  $(OBJS)  -lwsock32 -lws2_32 -static -static-libgcc -static-libstdc++
+	$(CC) $(CFLAGS) -o $@  $(OBJS)  -lwsock32 -lws2_32 -static
 
 $(OBJSDIR)/server.o: server.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -38,10 +38,10 @@ $(OBJSDIR)/log.o: log.cpp main.h
 $(OBJSDIR)/create_headers.o: create_headers.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJSDIR)/response.o: response.cpp main.h
+$(OBJSDIR)/response.o: response.cpp main.h range.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJSDIR)/range.o: range.cpp main.h classes.h
+$(OBJSDIR)/range.o: range.cpp main.h range.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJSDIR)/event_handler.o: event_handler.cpp main.h
@@ -59,16 +59,16 @@ $(OBJSDIR)/send_files.o: send_files.cpp main.h
 $(OBJSDIR)/rd_wr.o: rd_wr.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJSDIR)/threads_manager.o: threads_manager.cpp main.h
+$(OBJSDIR)/threads_manager.o: threads_manager.cpp main.h range.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJSDIR)/cgi.o: cgi.cpp main.h classes.h
+$(OBJSDIR)/cgi.o: cgi.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJSDIR)/fcgi.o: fcgi.cpp main.h classes.h
+$(OBJSDIR)/fcgi.o: fcgi.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJSDIR)/scgi.o: scgi.cpp main.h classes.h
+$(OBJSDIR)/scgi.o: scgi.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJSDIR)/index.o: index.cpp main.h

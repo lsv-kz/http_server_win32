@@ -37,7 +37,7 @@ int send_entity(Connect* req)//, char* rd_buf, int size_buf
     }
 
     ret = send_file_2(req->clientSocket, req->resp.fd, snd_buf, len);
-    if (ret <= 0)
+    if (ret < 0)
     {
         if (ret == -1)
             print_err(req, "<%s:%d> Error: Sent %lld bytes\n", __func__, __LINE__, req->resp.send_bytes);
@@ -159,12 +159,15 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                     }
                     else if (wr < 0)
                     {
-                        r->err = wr;
-                        r->req_hdrs.iReferer = MAX_HEADERS - 1;
-                        r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
+                        if (wr != TRYAGAIN)
+                        {
+                            r->err = wr;
+                            r->req_hdrs.iReferer = MAX_HEADERS - 1;
+                            r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
 
-                        del_from_list(r);
-                        end_response(r);
+                            del_from_list(r);
+                            end_response(r);
+                        }
                     }
                     else
                         r->sock_timer = 0;
@@ -179,11 +182,14 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                     }
                     else if (wr < 0)
                     {
-                        r->err = -1;
-                        r->req_hdrs.iReferer = MAX_HEADERS - 1;
-                        r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
-                        del_from_list(r);
-                        end_response(r);
+                        if (wr != TRYAGAIN)
+                        {
+                            r->err = -1;
+                            r->req_hdrs.iReferer = MAX_HEADERS - 1;
+                            r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
+                            del_from_list(r);
+                            end_response(r);
+                        }
                     }
                     else // (wr > 0)
                         r->sock_timer = 0;
@@ -194,12 +200,15 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                 int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
                 if (wr == SOCKET_ERROR)
                 {
-                    ErrorStrSock(__func__, __LINE__, "Error send()");
-                    r->err = -1;
-                    r->req_hdrs.iReferer = MAX_HEADERS - 1;
-                    r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
-                    del_from_list(r);
-                    end_response(r);
+                    int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                    if (err != WSAEWOULDBLOCK)
+                    {
+                        r->err = -1;
+                        r->req_hdrs.iReferer = MAX_HEADERS - 1;
+                        r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
+                        del_from_list(r);
+                        end_response(r);
+                    }
                 }
                 else if (wr > 0)
                 {
@@ -241,13 +250,14 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
         {
             --ret;
             int n = r->hd_read();
-            if (n == -EAGAIN)
-                r->sock_timer = 0;
-            else if (n < 0)
+            if (n < 0)
             {
-                r->err = n;
-                del_from_list(r);
-                end_response(r);
+                if (n != TRYAGAIN)
+                {
+                    r->err = n;
+                    del_from_list(r);
+                    end_response(r);
+                }
             }
             else if (n > 0)
             {
@@ -395,7 +405,9 @@ int send_html(Connect* r)
     int ret = send(r->clientSocket, r->html.p, r->html.len, 0);
     if (ret == SOCKET_ERROR)
     {
-        ErrorStrSock(__func__, __LINE__, "Error send()");
+        int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+        if (err == WSAEWOULDBLOCK)
+            return TRYAGAIN;
         return -1;
     }
 

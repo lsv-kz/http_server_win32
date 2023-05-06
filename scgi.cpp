@@ -3,7 +3,6 @@
 using namespace std;
 //======================================================================
 extern struct pollfd *cgi_poll_fd;
-extern Connect **cgi_poll_array;
 
 int get_sock_fcgi(Connect *r, const wchar_t *script);
 void cgi_del_from_list(Connect *r);
@@ -43,8 +42,6 @@ int scgi_set_size_data(Connect* r)
 //======================================================================
 int scgi_create_connect(Connect *req)
 {
-    req->cgi.status.scgi = SCGI_CONNECT;
-    req->cgi.dir = TO_CGI;
     if (req->reqMethod == M_POST)
     {
         if (req->req_hdrs.iReqContentType < 0)
@@ -199,7 +196,7 @@ int scgi_create_connect(Connect *req)
         param.val = "0";
         req->fcgi.vPar.push_back(param);
         ++i;
-        
+
         param.name = "CONTENT_TYPE";
         param.val = "";
         req->fcgi.vPar.push_back(param);
@@ -229,108 +226,39 @@ int scgi_create_connect(Connect *req)
     req->timeout = conf->TimeoutCGI;
     req->sock_timer = 0;
 
+    int ret = scgi_set_param(req);
+    if (ret <= 0)
+    {
+        fprintf(stderr, "<%s:%d> Error scgi_set_param()\n", __func__, __LINE__);
+        return -RS502;
+    }
+
     return 0;
 }
 //======================================================================
 void scgi_set_poll_list(Connect *r, int *nsock)
 {
-    if (r->cgi.status.scgi == SCGI_PARAMS)
+    r->io_status = POLL;
+
+    if (r->cgi.dir == FROM_CLIENT)
     {
-        if (r->cgi.len_buf == 0)
-        {
-            int ret = scgi_set_param(r);
-            if (ret < 0)
-            {
-                fprintf(stderr, "<%s:%d> Error scgi_set_param()\n", __func__, __LINE__);
-                r->err = -RS502;
-                cgi_del_from_list(r);
-                end_response(r);
-                return;
-            }
-            else if (ret == 0)
-            {
-                if (r->cgi.status.scgi == SCGI_READ_HTTP_HEADERS)
-                {
-                    cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-                    cgi_poll_fd[*nsock].events = POLLRDNORM;
-                    cgi_poll_array[*nsock] = r;
-                }
-                else if (r->cgi.status.scgi == SCGI_STDIN)
-                {
-                    cgi_poll_fd[*nsock].fd = r->clientSocket;
-                    cgi_poll_fd[*nsock].events = POLLRDNORM;
-                    cgi_poll_array[*nsock] = r;
-                }
-            }
-            else
-            {
-                cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-                cgi_poll_fd[*nsock].events = POLLWRNORM;
-                cgi_poll_array[*nsock] = r;
-            }
-        }
-        else
-        {
-            cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-            cgi_poll_fd[*nsock].events = POLLWRNORM;
-            cgi_poll_array[*nsock] = r;
-        }
+        cgi_poll_fd[*nsock].fd = r->clientSocket;
+        cgi_poll_fd[*nsock].events = POLLRDNORM;
     }
-    else if (r->cgi.status.scgi == SCGI_STDIN)
+    else if (r->cgi.dir == TO_CLIENT)
     {
-        if (r->cgi.dir == FROM_CLIENT)
-        {
-            cgi_poll_fd[*nsock].fd = r->clientSocket;
-            cgi_poll_fd[*nsock].events = POLLRDNORM;
-            cgi_poll_array[*nsock] = r;
-        }
-        else if (r->cgi.dir == TO_CGI)
-        {
-            cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-            cgi_poll_fd[*nsock].events = POLLWRNORM;
-            cgi_poll_array[*nsock] = r;
-        }
+        cgi_poll_fd[*nsock].fd = r->clientSocket;
+        cgi_poll_fd[*nsock].events = POLLWRNORM;
     }
-    else //==================== CGI_STDOUT =============================
+    else if (r->cgi.dir == FROM_CGI)
     {
-        if (r->cgi.status.scgi == SCGI_READ_HTTP_HEADERS)
-        {
-            cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-            cgi_poll_fd[*nsock].events = POLLRDNORM;
-            cgi_poll_array[*nsock] = r;
-        }
-        else if (r->cgi.status.scgi == SCGI_SEND_HTTP_HEADERS)
-        {
-            cgi_poll_fd[*nsock].fd = r->clientSocket;
-            cgi_poll_fd[*nsock].events = POLLWRNORM;
-            cgi_poll_array[*nsock] = r;
-        }
-        else if (r->cgi.status.scgi == SCGI_SEND_ENTITY)
-        {
-            if (r->cgi.dir == FROM_CGI)
-            {
-                cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-                cgi_poll_fd[*nsock].events = POLLRDNORM;
-                cgi_poll_array[*nsock] = r;
-            }
-            else if (r->cgi.dir == TO_CLIENT)
-            {
-                cgi_poll_fd[*nsock].fd = r->clientSocket;
-                cgi_poll_fd[*nsock].events = POLLWRNORM;
-                cgi_poll_array[*nsock] = r;
-            }
-        }
-        else
-        {
-            print_err(r, "<%s:%d> ??? Error: SCGI_STATUS=%s\n", __func__, __LINE__, get_scgi_status(r->cgi.status.scgi));
-            if (r->cgi.status.scgi <= SCGI_READ_HTTP_HEADERS)
-                r->err = -RS502;
-            else
-                r->err = -1;
-            cgi_del_from_list(r);
-            end_response(r);
-            return;
-        }
+        cgi_poll_fd[*nsock].fd = r->fcgi.fd;
+        cgi_poll_fd[*nsock].events = POLLRDNORM;
+    }
+    else if (r->cgi.dir == TO_CGI)
+    {
+        cgi_poll_fd[*nsock].fd = r->fcgi.fd;
+        cgi_poll_fd[*nsock].events = POLLWRNORM;
     }
 
     (*nsock)++;
@@ -346,8 +274,8 @@ int scgi_set_param(Connect *r)
         int len_name = r->fcgi.vPar[r->fcgi.i_param].name.size();
         if (len_name == 0)
         {
-            fprintf(stderr, "<%s:%d> Error: len_name=0\n", __func__, __LINE__);
-            return -1;
+            print_err(r, "<%s:%d> Error: len_name=0\n", __func__, __LINE__);
+            return -RS502;
         }
 
         int len_val = r->fcgi.vPar[r->fcgi.i_param].val.size();
@@ -375,6 +303,12 @@ int scgi_set_param(Connect *r)
 
         r->cgi.len_buf += len;
     }
+    
+    if(r->fcgi.i_param < r->fcgi.size_par)
+    {
+        print_err(r, "<%s:%d> Error: size of param > size of buf\n", __func__, __LINE__);
+        return -RS502;
+    }
 
     if (r->cgi.len_buf > 0)
     {      
@@ -382,55 +316,62 @@ int scgi_set_param(Connect *r)
     }
     else
     {
-        r->sock_timer = 0;
-        if (r->req_hdrs.reqContentLength > 0)
-        {
-            r->cgi.len_post = r->req_hdrs.reqContentLength - r->lenTail;
-            r->cgi.status.scgi = SCGI_STDIN;
-            if (r->lenTail > 0)
-            {
-                r->cgi.dir = TO_CGI;
-                r->timeout = conf->TimeoutCGI;
-                r->cgi.p = r->tail;
-                r->cgi.len_buf = r->lenTail;
-                r->tail = NULL;
-                r->lenTail = 0;
-            }
-            else // [r->lenTail == 0]
-            {
-                r->cgi.dir = FROM_CLIENT;
-                r->timeout = conf->TimeOut;
-            }
-        }
-        else
-        {
-            r->cgi.status.scgi = SCGI_READ_HTTP_HEADERS;
-            r->cgi.dir = FROM_CGI;
-            r->tail = NULL;
-            r->lenTail = 0;
-            r->p_newline = r->cgi.p = r->cgi.buf + 8;
-            r->cgi.len_buf = 0;
-            r->timeout = conf->TimeoutCGI;
-        }
+        print_err(r, "<%s:%d> Error: size param = 0\n", __func__, __LINE__);
+        return -RS502;
     }
 
     return r->cgi.len_buf;
 }
 //======================================================================
-void scgi_(Connect* r)
+void scgi_worker(Connect* r)
 {
     if (r->cgi.status.scgi == SCGI_PARAMS)
     {
         int ret = write_to_fcgi(r);
-        if (ret == -WSAENOTCONN)
+        if (ret < 0)
         {
+            if (ret != -WSAENOTCONN)
+            {
+                r->err = -RS502;
+                cgi_del_from_list(r);
+                end_response(r);
+            }
             return;
         }
-        else if (ret < 0)
+        
+        if (r->cgi.len_buf == 0)
         {
-            r->err = -RS502;
-            cgi_del_from_list(r);
-            end_response(r);
+            r->sock_timer = 0;
+            if (r->req_hdrs.reqContentLength > 0)
+            {
+                r->cgi.len_post = r->req_hdrs.reqContentLength;
+                r->cgi.status.scgi = SCGI_STDIN;
+                if (r->lenTail > 0)
+                {
+                    r->cgi.dir = TO_CGI;
+                    r->timeout = conf->TimeoutCGI;
+                    r->cgi.p = r->tail;
+                    r->cgi.len_buf = r->lenTail;
+                    r->tail = NULL;
+                    r->lenTail = 0;
+                    r->cgi.len_post -= r->cgi.len_buf;
+                }
+                else // [r->lenTail == 0]
+                {
+                    r->cgi.dir = FROM_CLIENT;
+                    r->timeout = conf->TimeOut;
+                }
+            }
+            else
+            {
+                r->cgi.status.scgi = SCGI_READ_HTTP_HEADERS;
+                r->cgi.dir = FROM_CGI;
+                r->tail = NULL;
+                r->lenTail = 0;
+                r->p_newline = r->cgi.p = r->cgi.buf + 8;
+                r->cgi.len_buf = 0;
+                r->timeout = conf->TimeoutCGI;
+            }
         }
     }
     else if (r->cgi.status.scgi == SCGI_STDIN)
@@ -438,25 +379,29 @@ void scgi_(Connect* r)
         int n = cgi_stdin(r);
         if (n < 0)
         {
-            print_err(r, "<%s:%d> Error cgi_stdin\n", __func__, __LINE__);
-            r->err = -1;
-            cgi_del_from_list(r);
-            end_response(r);
+            if (n != TRYAGAIN)
+            {
+                r->err = -1;
+                cgi_del_from_list(r);
+                end_response(r);
+            }
         }
+        else
+            r->sock_timer = 0;
     }
     else //==================== SCGI_STDOUT=============================
     {
         if (r->cgi.status.scgi == SCGI_READ_HTTP_HEADERS)
         {
             int ret = scgi_read_hdrs(r);
-            if (ret == -WSAEWOULDBLOCK)
-                r->sock_timer = 0;
-            else if (ret < 0)
+            if (ret < 0)
             {
-                fprintf(stderr, "<%s:%d> Error cgi_read_hdrs()=%d\n", __func__, __LINE__, ret);
-                r->err = -RS502;
-                cgi_del_from_list(r);
-                end_response(r);
+                if (ret != TRYAGAIN)
+                {
+                    r->err = -RS502;
+                    cgi_del_from_list(r);
+                    end_response(r);
+                }
             }
             else if (ret > 0)
             {
@@ -473,6 +418,7 @@ void scgi_(Connect* r)
                     r->resp_headers.p = r->resp_headers.s.c_str();
                     r->resp_headers.len = r->resp_headers.s.size();
                     r->cgi.status.scgi = SCGI_SEND_HTTP_HEADERS;
+                    r->cgi.dir = TO_CLIENT;
                 }
             }
             else // ret == 0
@@ -485,9 +431,8 @@ void scgi_(Connect* r)
                 int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
                 if (wr < 0)
                 {
-                    if (errno == EAGAIN)
-                        r->sock_timer = 0;
-                    else
+                    int err = GetLastError();
+                    if (err != WSAEWOULDBLOCK)
                     {
                         r->err = -1;
                         r->req_hdrs.iReferer = MAX_HEADERS - 1;
@@ -502,12 +447,12 @@ void scgi_(Connect* r)
                     r->resp_headers.len -= wr;
                     if (r->resp_headers.len == 0)
                     {
-                        if (r->reqMethod == M_HEAD)
+                        /*if (r->reqMethod == M_HEAD)
                         {
                             cgi_del_from_list(r);
                             end_response(r);
                         }
-                        else
+                        else*/
                         {
                             r->cgi.status.scgi = SCGI_SEND_ENTITY;
                             r->sock_timer = 0;
@@ -515,8 +460,8 @@ void scgi_(Connect* r)
                             {
                                 if (r->mode_send == CHUNK)
                                 {
-                                    memmove(r->cgi.buf + 8, r->tail, r->lenTail);
                                     r->cgi.len_buf = r->lenTail;
+                                    r->cgi.p = r->tail;
                                     r->tail = NULL;
                                     r->lenTail = 0;
                                     if (cgi_set_size_chunk(r))
@@ -531,7 +476,6 @@ void scgi_(Connect* r)
                                 {
                                     r->cgi.p = r->tail;
                                     r->cgi.len_buf = r->lenTail;
-                                    r->tail = NULL;
                                     r->lenTail = 0;
                                 }
                                 r->cgi.dir = TO_CLIENT;
@@ -563,9 +507,9 @@ void scgi_(Connect* r)
         else if (r->cgi.status.scgi == SCGI_SEND_ENTITY)
         {
             int ret = scgi_stdout(r);
-            if (ret == -EAGAIN)
+            if (ret == TRYAGAIN)
             {
-                r->sock_timer = 0;
+                return;
             }
             else if (ret < 0)
             {
@@ -609,7 +553,7 @@ int scgi_read_hdrs(Connect *r)
     {
         int err = GetLastError();
         if (err == WSAEWOULDBLOCK)
-            return -WSAEWOULDBLOCK;
+            return TRYAGAIN;
         r->err = -RS502;
         return -1;
     }
@@ -650,11 +594,12 @@ int scgi_stdout(Connect *req)
     {
         int fd = req->fcgi.fd;
         req->cgi.len_buf = recv(fd, req->cgi.buf + 8, req->cgi.size_buf, 0);
-        if (req->cgi.len_buf == -1)
+        if (req->cgi.len_buf == SOCKET_ERROR)
         {
-            print_err(req, "<%s:%d> Error read from script(): %s\n", __func__, __LINE__, strerror(errno));
-            if (errno == EAGAIN)
-                return -EAGAIN;
+            int err = GetLastError();
+            if (err == WSAEWOULDBLOCK)
+                return TRYAGAIN;
+            print_err(req, "<%s:%d> Error read from script(): %d\n", __func__, __LINE__, err);
             return -1;
         }
         else if (req->cgi.len_buf == 0)
@@ -662,33 +607,34 @@ int scgi_stdout(Connect *req)
             if (req->mode_send == CHUNK)
             {
                 req->cgi.len_buf = 0;
+                req->cgi.p = req->cgi.buf + 8;
                 cgi_set_size_chunk(req);
                 req->cgi.dir = TO_CLIENT;
                 req->mode_send = CHUNK_END;
-                return 4;
+                return req->cgi.len_buf;
             }
 
             return 0;
         }
 
         req->cgi.dir = TO_CLIENT;
+        req->cgi.p = req->cgi.buf + 8;
         if (req->mode_send == CHUNK)
         {
             if (cgi_set_size_chunk(req))
                 return -1;
         }
-        else
-            req->cgi.p = req->cgi.buf + 8;
         return req->cgi.len_buf;
     }
     else if (req->cgi.dir == TO_CLIENT)
     {
         int ret = send(req->clientSocket, req->cgi.p, req->cgi.len_buf, 0);
-        if (ret == -1)
+        if (ret == SOCKET_ERROR)
         {
-            print_err(req, "<%s:%d> Error send to client: %s\n", __func__, __LINE__, strerror(errno));
-            if (errno == EAGAIN)
-                return -EAGAIN;
+            int err = GetLastError();
+            if (err == WSAEWOULDBLOCK)
+                return TRYAGAIN;
+            print_err(req, "<%s:%d> Error send to client: %d\n", __func__, __LINE__, err);
             return -1;
         }
 
@@ -707,7 +653,8 @@ int scgi_stdout(Connect *req)
 //======================================================================
 int timeout_scgi(Connect *r)
 {
-    if ((r->cgi.status.scgi == SCGI_STDIN) && (r->cgi.dir == TO_CGI))
+    if (((r->cgi.status.scgi == SCGI_PARAMS) || (r->cgi.status.scgi == SCGI_STDIN)) && 
+        (r->cgi.dir == TO_CGI))
         return -RS504;
     else if (r->cgi.status.scgi == SCGI_READ_HTTP_HEADERS)
         return -RS504;

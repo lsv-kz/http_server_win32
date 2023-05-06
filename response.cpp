@@ -1,4 +1,4 @@
-#include "classes.h"
+#include "range.h"
 
 using namespace std;
 //======================================================================
@@ -114,8 +114,7 @@ void response1(RequestManager* ReqMan)
     }
 }
 //======================================================================
-const char boundary[] = "----------a9b5r7a4c0a2d5a1b8r3a";
-int send_multypart(Connect* req, ArrayRanges& rg, char* rd_buf, int* size);
+int send_multypart(Connect* req, Ranges& rg, char* rd_buf, int* size);
 int create_multipart_head(Connect* req, Range* ranges, char* buf, int len_buf);
 //======================================================================
 long long file_size(const wchar_t* s)
@@ -338,7 +337,7 @@ int response2(RequestManager* ReqMan, Connect* req)
     if (req->reqMethod == M_OPTIONS)
         return options(req);
 
-    ArrayRanges rg;
+    Ranges rg;
     if (req->req_hdrs.iRange >= 0)
     {
         try
@@ -417,7 +416,7 @@ int response2(RequestManager* ReqMan, Connect* req)
     return 1;
 }
 //======================================================================
-int send_multypart(Connect* req, ArrayRanges& rg, char* rd_buf, int* size)
+int send_multypart(Connect* req, Ranges& rg, char* rd_buf, int* size)
 {
     int n;
     long long send_all_bytes = 0;

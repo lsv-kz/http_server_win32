@@ -10,7 +10,7 @@ struct Range {
     long long len;
 };
 //----------------------------------------------------------------------
-class ArrayRanges // except
+class Ranges // except
 {
 protected:
     const int ADDITION = 8;
@@ -24,15 +24,15 @@ protected:
     int parse_ranges(char* sRange, String& ss);
 
 public:
-    ArrayRanges(const ArrayRanges&) = delete;
-    ArrayRanges()
+    Ranges(const Ranges&) = delete;
+    Ranges()
     {
         sizeBuf = lenBuf = numPart = 0;
         sizeFile = 0LL;
         range = NULL;
     }
 
-    ~ArrayRanges()
+    ~Ranges()
     {
         if (range) delete[] range;
     }
@@ -44,16 +44,18 @@ public:
         Range * tmp = new(std::nothrow) Range[n];
         if (!tmp)
             return 1;
-        for (unsigned int c = 0; c < lenBuf; ++c)
-            tmp[c] = range[c];
         if (range)
+        {
+            for (unsigned int i = 0; i < lenBuf; ++i)
+                tmp[i] = range[i];
             delete[] range;
+        }
         range = tmp;
         sizeBuf = n;
         return 0;
     }
 
-    ArrayRanges & operator << (const Range & val)
+    Ranges & operator << (const Range & val)
     {
         if (lenBuf >= sizeBuf)
             if (resize(sizeBuf + ADDITION)) throw ENOMEM;
