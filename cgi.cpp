@@ -42,7 +42,7 @@ void fcgi_set_poll_list(Connect *r, int *i);
 void fcgi_worker(Connect* r);
 int timeout_fcgi(Connect *r);
 
-void scgi_set_poll_list(Connect *r, int *i);
+//void scgi_set_poll_list(Connect *r, int *i);
 void scgi_worker(Connect* r);
 int timeout_scgi(Connect *r);
 int scgi_create_connect(Connect *req);
@@ -321,10 +321,10 @@ static void cgi_set_poll_list()
                     break;
                 case PHPFPM:
                 case FASTCGI:
-                    fcgi_set_poll_list(r, &n_poll);
-                    break;
+                    //fcgi_set_poll_list(r, &n_poll);
+                    //break;
                 case SCGI:
-                    scgi_set_poll_list(r, &n_poll);
+                    fcgi_set_poll_list(r, &n_poll);
                     break;
                 default:
                     print_err(r, "<%s:%d> ??? cgi.scriptType=%d\n", __func__, __LINE__, r->resp.scriptType);
