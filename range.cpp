@@ -1,16 +1,15 @@
-#include "range.h"
+#include "main.h"
 
 //======================================================================
-int Ranges::check_ranges()
+void Ranges::check_ranges()
 {
-    int numPart, maxIndex, n;
-    Range* r = range;
-    numPart = lenBuf;
-    maxIndex = n = numPart - 1;
+    if (err) return;
+    int num = nRanges;
+    Range *r = range;
 
-    while (n > 0)
+    for ( int n = num - 1; n > 0; n--)
     {
-        for (int i = n - 1; i >= 0; )
+        for (int i = n - 1; i >= 0; i--)
         {
             if (((r[n].end + 1) >= r[i].start) && ((r[i].end + 1) >= r[n].start))
             {
@@ -23,143 +22,166 @@ int Ranges::check_ranges()
                 r[i].len = r[i].end - r[i].start + 1;
                 r[n].len = 0;
 
-                if ((maxIndex > n) && (r[maxIndex].len > 0))
-                {
-                    r[n].start = r[maxIndex].start;
-                    r[n].end = r[maxIndex].end;
-                    r[n].len = r[maxIndex].len;
-                    r[maxIndex].len = 0;
-                    maxIndex--;
-                    n = maxIndex - 1;
-                }
-                else
-                {
-                    maxIndex--;
-                    n = maxIndex;
-                }
-                numPart--;
-                i = n - 1;
+                n--;
+                nRanges--;
             }
-            else
-                i--;
         }
-        n--;
     }
 
-    return numPart;
+    for (int i = 0, j = 0; j < num; j++)
+    {
+        if (r[j].len)
+        {
+            if (i < j)
+            {
+                r[i].start = r[j].start;
+                r[i].end = r[j].end;
+                r[i].len = r[j].len;
+                r[j].len = 0;
+            }
+
+            i++;
+        }
+    }
 }
-//======================================================================
-int Ranges::parse_ranges(char* sRange, String& ss)
+//----------------------------------------------------------------------
+void Ranges::parse_ranges(char *sRange)
 {
-    char* p0 = sRange, * p;
-    long long size = sizeFile;
-    int numPart = 0;
+    if (err) return;
+    long long start = 0, end = 0, size = sizeFile, ll;
+    int i = 0;
+    const char *p1;
+    char *p2;
 
-    for (; *p0; p0++)
-    {
-        if ((*p0 != ' ') && (*p0 != '\t'))
-            break;
-    }
+    p1 = p2 = sRange;
 
-    for (p = p0; *p; )
+    for ( ; nRanges < SizeArray; )
     {
-        long long start = 0, end = 0;
-        char ch = *p;
-        if ((ch >= '0') && (ch <= '9'))
+        if (err) return;
+        if ((*p1 >= '0') && (*p1 <= '9'))
         {
-            start = strtoll(p, &p, 10);
-            if (*p == '-')
+            ll = strtoll(p1, &p2, 10);
+            if (p1 < p2)
             {
-                ch = *(++p);
-                if ((ch >= '0') && (ch <= '9'))// [10-50]
-                {
-                    end = strtoll(p, &p, 10);
-                    if ((*p != ',') && (*p != 0))
-                        break;
-                }
-                else if ((ch == ',') || (ch == 0))// [10-]
-                    end = size - 1;
+                if (i == 0)
+                    start = ll;
+                else if (i == 2)
+                    end = ll;
                 else
-                    break;
+                {
+                    err = RS416;
+                    return;
+                }
+
+                i++;
+                p1 = p2;
+            }
+        }
+        else if (*p1 == ' ')
+            p1++;
+        else if (*p1 == '-')
+        {
+            if (i == 0)
+            {
+                ll = strtoll(p1, &p2, 10);
+                if (ll < 0)
+                {
+                    start = size + ll;
+                    end = size - 1;
+                    i = 3;
+                    p1 = p2;
+                }
+                else
+                {
+                    err = RS416;
+                    return;
+                }
+            }
+            else if (i == 2)
+            {
+                err = RS416;
+                return;
             }
             else
             {
-                return 0;
+                p1++;
+                i++;
             }
         }
-        else if (ch == '-')
+        else if ((*p1 == ',') || (*p1 == 0))
         {
-            if ((*(p + 1) >= '0') && (*(p + 1) <= '9'))// [-50]
+            if (i == 2)
+                end = size - 1;
+            else if (i != 3)
             {
-                end = strtoll(p, &p, 10);
-                if ((*p != ',') && (*p != 0))
-                    break;
-                start = size + end;
+                err = RS416;
+                return;
+            }
+
+            if (start < 0)
+            {
+                start = 0;
                 end = size - 1;
             }
+            else if (end >= size)
+                end = size - 1;
+
+            if (start <= end)
+            {
+                (*this) << Range{start, end, end - start + 1};
+                if (*p1 == 0)
+                    break;
+                start = end = 0;
+                p1++;
+                i = 0;
+            }
             else
             {
-                return 0;
+                err =  RS416;
+                return;
             }
         }
         else
         {
-            break;
+            err = RS416;
+            return;
         }
-
-        if (end >= size)
-            end = size - 1;
-
-        if ((start < size) && (end >= start) && (start >= 0))
-        {
-            ss << start << "-" << end;
-            if (*p == ',')
-                ss << ",";
-            numPart++;
-            if (*p == 0)
-                break;
-        }
-        p++;
     }
-
-    return numPart;
 }
-//======================================================================
-int Ranges::create_ranges(char* s, long long sz)
+//----------------------------------------------------------------------
+void Ranges::init(char *s, long long sz)
 {
-    String ss(128);
-    if (ss.error())
+    err = 0;
+    if (!s)
     {
-        return 0;
+        err = RS500;
+        return;
     }
+
+    if (conf->MaxRanges == 0)
+    {
+        err = RS403;
+        return;
+    }
+
+    nRanges = index = 0;
+
+    unsigned int n = 0;
+    for ( char *p = s; *p; ++p)
+    {
+        if (*p == ',')
+            n++;
+    }
+
+    n++;
+
+    if (n > conf->MaxRanges)
+        n = conf->MaxRanges;
+    reserve(n);
     sizeFile = sz;
-    numPart = parse_ranges(s, ss);
-    if (numPart > 0)
-    {
-        if (resize(numPart))
-        {
-            numPart = 0;
-            return 0;
-        }
-
-        const char* p = ss.c_str();
-        char* pp;
-        for (int i = 0; i < numPart; ++i)
-        {
-            long long start, end;
-            start = strtoll(p, &pp, 10);
-            pp++;
-            p = pp;
-
-            end = strtoll(p, &pp, 10);
-            pp++;
-            p = pp;
-
-            (*this) << Range{ start, end, end - start + 1 };
-        }
-
-        if (numPart > 1)
-            numPart = check_ranges();
-    }
-    return numPart;
+    parse_ranges(s);
+    if ((nRanges == 0) && (err == 0))
+        err = RS416;
+    else if (nRanges > 1)
+        check_ranges();
 }

@@ -236,32 +236,6 @@ int scgi_create_connect(Connect *req)
     return 0;
 }
 //======================================================================
-/*void scgi_set_poll_list(Connect *r, int *nsock)
-{
-    r->io_status = POLL;
-    if (r->cgi.dir == FROM_CLIENT)
-    {
-        cgi_poll_fd[*nsock].fd = r->clientSocket;
-        cgi_poll_fd[*nsock].events = POLLRDNORM;
-    }
-    else if (r->cgi.dir == TO_CLIENT)
-    {
-        cgi_poll_fd[*nsock].fd = r->clientSocket;
-        cgi_poll_fd[*nsock].events = POLLWRNORM;
-    }
-    else if (r->cgi.dir == FROM_CGI)
-    {
-        cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-        cgi_poll_fd[*nsock].events = POLLRDNORM;
-    }
-    else if (r->cgi.dir == TO_CGI)
-    {
-        cgi_poll_fd[*nsock].fd = r->fcgi.fd;
-        cgi_poll_fd[*nsock].events = POLLWRNORM;
-    }
-    (*nsock)++;
-}*/
-//======================================================================
 int scgi_set_param(Connect *r)
 {
     r->cgi.len_buf = 0;

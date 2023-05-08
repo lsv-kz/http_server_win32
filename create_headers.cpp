@@ -118,13 +118,6 @@ int send_message(Connect* r, const char* msg)
     return 1;
 }
 //=====================================================================
-int send_response_headers(Connect* req)
-{
-    if (create_response_headers(req) < 0)
-        return -1;
-    return write_timeout(req->clientSocket, req->resp_headers.s.c_str(), req->resp_headers.s.size(), conf->TimeOut);
-}
-//=====================================================================
 const char* status_resp(int st)
 {
     switch (st)

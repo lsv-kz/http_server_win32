@@ -15,7 +15,6 @@ OBJS = $(OBJSDIR)/server.o \
 	$(OBJSDIR)/range.o \
 	$(OBJSDIR)/encoding.o \
 	$(OBJSDIR)/functions.o \
-	$(OBJSDIR)/rd_wr.o \
 	$(OBJSDIR)/threads_manager.o \
 	$(OBJSDIR)/event_handler.o \
 	$(OBJSDIR)/index.o \
@@ -54,9 +53,6 @@ $(OBJSDIR)/functions.o: functions.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJSDIR)/send_files.o: send_files.cpp main.h
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(OBJSDIR)/rd_wr.o: rd_wr.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJSDIR)/threads_manager.o: threads_manager.cpp main.h range.h

@@ -21,6 +21,8 @@ static int size_buf;
 static char* snd_buf;
 
 int send_html(Connect* r);
+void set_part(Connect *r);
+int create_multipart_head(Connect *req);
 //======================================================================
 int send_entity(Connect* req)//, char* rd_buf, int size_buf
 {
@@ -36,7 +38,7 @@ int send_entity(Connect* req)//, char* rd_buf, int size_buf
             return 0;
     }
 
-    ret = send_file_2(req->clientSocket, req->resp.fd, snd_buf, len);
+    ret = send_file(req->clientSocket, req->resp.fd, snd_buf, len);
     if (ret < 0)
     {
         if (ret == -1)
@@ -172,6 +174,97 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                     else
                         r->sock_timer = 0;
                 }
+                else if (r->source_entity == MULTIPART_ENTITY)
+                {
+                    if (r->mp.status == SEND_HEADERS)
+                    {
+                        int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
+                        if (wr == SOCKET_ERROR)
+                        {
+                            int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                            if (err != WSAEWOULDBLOCK)
+                            {
+                                r->err = -1;
+                                r->req_hdrs.iReferer = MAX_HEADERS - 1;
+                                r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
+                                del_from_list(r);
+                                end_response(r);
+                            }
+                        }
+                        else if (wr > 0)
+                        {
+                            r->resp_headers.p += wr;
+                            r->resp_headers.len -= wr;
+                            r->resp.send_bytes += wr;
+                            if (r->resp_headers.len == 0)
+                            {
+                                r->mp.status = SEND_PART;
+                            }
+                            r->sock_timer = 0;
+                        }
+                    }
+                    else if (r->mp.status == SEND_PART)
+                    {
+                        int wr = send_entity(r);
+                        if (wr == 0)
+                        {
+                            r->sock_timer = 0;
+                            r->mp.rg = r->rg.get();
+                            if (r->mp.rg)
+                            {
+                                set_part(r);
+                            }
+                            else
+                            {
+                                r->mp.status = SEND_END;
+                                r->mp.hdr = "";
+                                r->mp.hdr << "\r\n--" << boundary << "--\r\n";
+                                r->resp_headers.len = r->mp.hdr.size();
+                                r->resp_headers.p = r->mp.hdr.c_str();
+                            }
+                        }
+                        else if (wr < 0)
+                        {
+                            if (wr != TRYAGAIN)
+                            {
+                                r->err = wr;
+                                r->req_hdrs.iReferer = MAX_HEADERS - 1;
+                                r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
+                                del_from_list(r);
+                                end_response(r);
+                            }
+                        }
+                    }
+                    else if (r->mp.status == SEND_END)
+                    {
+                        int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
+                        if (wr == SOCKET_ERROR)
+                        {
+                            int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                            if (err != WSAEWOULDBLOCK)
+                            {
+                                r->err = -1;
+                                r->req_hdrs.iReferer = MAX_HEADERS - 1;
+                                r->req_hdrs.Value[r->req_hdrs.iReferer] = "Connection reset by peer";
+                                del_from_list(r);
+                                end_response(r);
+                            }
+                        }
+                        else if (wr > 0)
+                        {
+                            r->resp_headers.p += wr;
+                            r->resp_headers.len -= wr;
+                            r->resp.send_bytes += wr;
+                            if (r->resp_headers.len == 0)
+                            {
+                                del_from_list(r);
+                                end_response(r);
+                            }
+                            else
+                                r->sock_timer = 0;
+                        }
+                    }
+                }
                 else if (r->source_entity == FROM_DATA_BUFFER)
                 {
                     int wr = send_html(r);
@@ -223,15 +316,36 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                         }
                         else
                         {
-                            if ((r->source_entity == FROM_DATA_BUFFER) && (r->html.len == 0))
+                            r->sock_timer = 0;
+                            if (r->source_entity == FROM_DATA_BUFFER)
                             {
-                                del_from_list(r);
-                                end_response(r);
+                                if (r->html.len == 0)
+                                {
+                                    del_from_list(r);
+                                    end_response(r);
+                                }
+                                else
+                                {
+                                    r->operation = SEND_ENTITY;
+                                }
                             }
-                            else
+                            else if (r->source_entity == FROM_FILE)
                             {
                                 r->operation = SEND_ENTITY;
-                                r->sock_timer = 0;
+                            }
+                            else if (r->source_entity == MULTIPART_ENTITY)
+                            {
+                                if ((r->mp.rg = r->rg.get()))
+                                {
+                                    r->operation = SEND_ENTITY;
+                                    set_part(r);
+                                }
+                                else
+                                {
+                                    r->err = -1;
+                                    del_from_list(r);
+                                    end_response(r);
+                                }
                             }
                         }
                     }
@@ -331,6 +445,23 @@ void event_handler(RequestManager* ReqMan)
     delete[] pollfd_array;
 }
 //======================================================================
+void add_wait_list(Connect *r)
+{
+    r->sock_timer = 0;
+    r->next = NULL;
+mtx_.lock();
+    r->prev = wait_list_end;
+    if (wait_list_start)
+    {
+        wait_list_end->next = r;
+        wait_list_end = r;
+    }
+    else
+        wait_list_start = wait_list_end = r;
+mtx_.unlock();
+    cond_.notify_one();
+}
+//======================================================================
 void push_send_file(Connect* r)
 {
     r->event = POLLWRNORM;
@@ -340,19 +471,25 @@ void push_send_file(Connect* r)
     r->resp_headers.len = r->resp_headers.s.size();
 
     _lseeki64(r->resp.fd, r->resp.offset, SEEK_SET);
-    r->sock_timer = 0;
-    r->next = NULL;
-mtx_.lock();
-    r->prev = wait_list_end;
-    if (wait_list_start)
-    {
-        wait_list_end->next = r;
-        wait_list_end = r;
-    }
-    else
-        wait_list_start = wait_list_end = r;
-mtx_.unlock();
-    cond_.notify_one();
+    add_wait_list(r);
+}
+//======================================================================
+void push_pollin_list(Connect* r)
+{
+    r->event = POLLRDNORM;
+    r->operation = READ_REQUEST;
+    add_wait_list(r);
+}
+//======================================================================
+void push_send_multipart(Connect *r)
+{
+    r->resp_headers.p = r->resp_headers.s.c_str();
+    r->resp_headers.len = r->resp_headers.s.size();
+    
+    r->event = POLLOUT;
+    r->source_entity = MULTIPART_ENTITY;
+    r->operation = SEND_RESP_HEADERS;
+    add_wait_list(r);
 }
 //======================================================================
 void push_send_html(Connect* r)
@@ -360,38 +497,7 @@ void push_send_html(Connect* r)
     r->event = POLLWRNORM;
     r->source_entity = FROM_DATA_BUFFER;
     r->operation = SEND_RESP_HEADERS;
-    r->sock_timer = 0;
-    r->next = NULL;
-mtx_.lock();
-    r->prev = wait_list_end;
-    if (wait_list_start)
-    {
-        wait_list_end->next = r;
-        wait_list_end = r;
-    }
-    else
-        wait_list_start = wait_list_end = r;
-mtx_.unlock();
-    cond_.notify_one();
-}
-//======================================================================
-void push_pollin_list(Connect* r)
-{
-    r->event = POLLRDNORM;
-    r->operation = READ_REQUEST;
-    r->sock_timer = 0;
-    r->next = NULL;
-mtx_.lock();
-    r->prev = wait_list_end;
-    if (wait_list_start)
-    {
-        wait_list_end->next = r;
-        wait_list_end = r;
-    }
-    else
-        wait_list_start = wait_list_end = r;
-mtx_.unlock();
-    cond_.notify_one();
+    add_wait_list(r);
 }
 //======================================================================
 void close_event_handler(void)
@@ -419,4 +525,15 @@ int send_html(Connect* r)
 
     return ret;
 }
-
+//======================================================================
+void set_part(Connect *r)
+{
+    r->mp.status = SEND_HEADERS;
+    
+    r->resp_headers.len = create_multipart_head(r);
+    r->resp_headers.p = r->mp.hdr.c_str();
+    
+    r->resp.offset = r->mp.rg->start;
+    r->resp.respContentLength = r->mp.rg->len;
+    lseek(r->resp.fd, r->resp.offset, SEEK_SET);
+}

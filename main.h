@@ -37,6 +37,7 @@
 #include <process.h>
 
 #include "String.h"
+#include "range.h"
 
 const int MAX_NAME = 256;
 const int SIZE_BUF_REQUEST = 8192;
@@ -64,8 +65,9 @@ enum { HTTP09 = 1, HTTP10, HTTP11, HTTP2 };
 enum { EXIT_THR = 1 };
 
 enum MODE_SEND { NO_CHUNK, CHUNK, CHUNK_END };
-enum SOURCE_ENTITY { ENTITY_NONE, FROM_FILE, FROM_DATA_BUFFER, };
+enum SOURCE_ENTITY { ENTITY_NONE, FROM_FILE, FROM_DATA_BUFFER, MULTIPART_ENTITY, };
 enum OPERATION_TYPE { READ_REQUEST = 1, SEND_RESP_HEADERS, SEND_ENTITY, DYN_PAGE, };
+enum MULTIPART_STATUS { SEND_HEADERS = 1, SEND_PART, SEND_END };
 enum IO_STATUS { POLL = 1, WAIT_PIPE, WORK };
 
 enum CGI_TYPE { CGI_TYPE_NONE, CGI, PHPCGI, PHPFPM, FASTCGI, SCGI, };
@@ -137,6 +139,7 @@ struct Config
     std::string pathPHP_FPM = "";
 
     long int ClientMaxBodySize = 1000000;
+    unsigned int MaxRanges = 10;
 
     char index_html = 'n';
     char index_php = 'n';
@@ -234,6 +237,7 @@ public:
     int  reqMethod;
     
     std::wstring wScriptName;
+    CGI_TYPE scriptType;
     
     const char* sReqParam;
     char* sRange;
@@ -293,7 +297,15 @@ public:
         char buf[8];
         int len_header;
     } fcgi;
-    
+
+    Ranges rg;
+    struct
+    {
+        MULTIPART_STATUS status;
+        Range *rg;
+        String hdr;
+    } mp;
+
     SOURCE_ENTITY source_entity;
     MODE_SEND mode_send;
     
@@ -304,9 +316,6 @@ public:
         const char *respContentType;
         long long fileSize;
         int  countRespHeaders = 0;
-
-        CGI_TYPE scriptType;
-
         int  numPart;
         int  fd;
         long long offset;
@@ -331,6 +340,7 @@ public:
         reqMethod = 0;
         httpProt = 0;
         connKeepAlive = 0;
+        scriptType = CGI_TYPE_NONE;
 
         req_hdrs = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, -1LL };
         req_hdrs.Name[0] = NULL;
@@ -344,7 +354,6 @@ public:
         resp.numPart = 0;
         resp.send_bytes = 0LL;
         resp.respContentType = NULL;
-        resp.scriptType = CGI_TYPE_NONE;
         resp.countRespHeaders = 0;
         resp.sTime = "";
         hdrs = "";
@@ -435,10 +444,7 @@ std::string encode(const std::string& s_in);
 int send_message(Connect* req, const char* msg);
 int create_response_headers(Connect* req);
 int send_response_headers(Connect* req);
-
-int write_timeout(SOCKET sock, const char* buf, size_t len, int timeout);
-int send_file_1(SOCKET sock, int fd_in, char* buf, int* size, long long offset, long long* cont_len);
-int send_file_2(SOCKET sock, int fd_in, char* buf, int size);
+int send_file(SOCKET sock, int fd_in, char* buf, int size);
 //----------------------------------------------------------------------
 void open_logfiles(HANDLE, HANDLE);
 void print_err(Connect* req, const char* format, ...);
@@ -450,6 +456,7 @@ void end_response(Connect* req);
 void event_handler(RequestManager* ReqMan);
 void push_pollin_list(Connect* req);
 void push_send_file(Connect* req);
+void push_send_multipart(Connect *req);
 void push_send_html(Connect* req);
 void close_event_handler();
 //----------------------------------------------------------------------

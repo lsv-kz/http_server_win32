@@ -42,7 +42,6 @@ void fcgi_set_poll_list(Connect *r, int *i);
 void fcgi_worker(Connect* r);
 int timeout_fcgi(Connect *r);
 
-//void scgi_set_poll_list(Connect *r, int *i);
 void scgi_worker(Connect* r);
 int timeout_scgi(Connect *r);
 int scgi_create_connect(Connect *req);
@@ -137,8 +136,8 @@ size_t Cgi::param(const char* name, const char* val)
 //======================================================================
 void cgi_del_from_list(Connect *r)
 {
-    if ((r->resp.scriptType == CGI) || 
-        (r->resp.scriptType == PHPCGI))
+    if ((r->scriptType == CGI) || 
+        (r->scriptType == PHPCGI))
     {
         if (r->cgi.Pipe.hEvent != INVALID_HANDLE_VALUE)
             CloseHandle(r->cgi.Pipe.hEvent);
@@ -149,9 +148,9 @@ void cgi_del_from_list(Connect *r)
             CloseHandle(r->cgi.Pipe.parentPipe);
         }
     }
-    else if ((r->resp.scriptType == PHPFPM) || 
-             (r->resp.scriptType == FASTCGI) ||
-             (r->resp.scriptType == SCGI))
+    else if ((r->scriptType == PHPFPM) || 
+             (r->scriptType == FASTCGI) ||
+             (r->scriptType == SCGI))
     {
         if (r->fcgi.fd > 0)
         {
@@ -199,7 +198,7 @@ mtx_.lock();
                 wait_list_start = NULL;
             --num_wait;
             //---------------------------
-            if ((r->resp.scriptType == CGI) || (r->resp.scriptType == PHPCGI))
+            if ((r->scriptType == CGI) || (r->scriptType == PHPCGI))
             {
                 int err = cgi_create_proc(r);
                 if (err != 0)
@@ -210,7 +209,7 @@ mtx_.lock();
                     continue;
                 }
             }
-            else if ((r->resp.scriptType == PHPFPM) || (r->resp.scriptType == FASTCGI))
+            else if ((r->scriptType == PHPFPM) || (r->scriptType == FASTCGI))
             {
                 int ret = fcgi_create_connect(r);
                 if (ret < 0)
@@ -222,7 +221,7 @@ mtx_.lock();
 
                 fcgi_create_param(r);
             }
-            else if (r->resp.scriptType == SCGI)
+            else if (r->scriptType == SCGI)
             {
                 int ret = scgi_create_connect(r);
                 if (ret < 0)
@@ -296,13 +295,13 @@ static void cgi_set_poll_list()
         {
             print_err(r, "<%s:%d> Timeout=%llu, dir=%s, type=%s\n", 
                 __func__, __LINE__, t - r->sock_timer, 
-                get_cgi_dir(r->cgi.dir), get_cgi_type(r->resp.scriptType));
+                get_cgi_dir(r->cgi.dir), get_cgi_type(r->scriptType));
 
-            if ((r->resp.scriptType == CGI) || (r->resp.scriptType == PHPCGI))
+            if ((r->scriptType == CGI) || (r->scriptType == PHPCGI))
                 r->err = timeout_cgi(r);
-            else if ((r->resp.scriptType == PHPFPM) || (r->resp.scriptType == FASTCGI))
+            else if ((r->scriptType == PHPFPM) || (r->scriptType == FASTCGI))
                 r->err = timeout_fcgi(r);
-            else if (r->resp.scriptType == SCGI)
+            else if (r->scriptType == SCGI)
                 r->err = timeout_scgi(r);
             else
                 r->err = -1;
@@ -313,7 +312,7 @@ static void cgi_set_poll_list()
         }
         else
         {
-            switch (r->resp.scriptType)
+            switch (r->scriptType)
             {
                 case CGI:
                 case PHPCGI:
@@ -321,13 +320,11 @@ static void cgi_set_poll_list()
                     break;
                 case PHPFPM:
                 case FASTCGI:
-                    //fcgi_set_poll_list(r, &n_poll);
-                    //break;
                 case SCGI:
                     fcgi_set_poll_list(r, &n_poll);
                     break;
                 default:
-                    print_err(r, "<%s:%d> ??? cgi.scriptType=%d\n", __func__, __LINE__, r->resp.scriptType);
+                    print_err(r, "<%s:%d> ??? cgi.scriptType=%d\n", __func__, __LINE__, r->scriptType);
                     r->err = -RS500;
                     cgi_del_from_list(r);
                     end_response(r);
@@ -405,7 +402,7 @@ static int cgi_poll(int num_chld, RequestManager *ReqMan)
             }
             else
             {
-                switch (r->resp.scriptType)
+                switch (r->scriptType)
                 {
                     case CGI:
                     case PHPCGI:
@@ -462,7 +459,7 @@ static int cgi_poll(int num_chld, RequestManager *ReqMan)
                         end_response(r);
                         break;
                     default:
-                        print_err(r, "<%s:%d> ??? cgi.scriptType=%s\n", __func__, __LINE__, get_cgi_type(r->resp.scriptType));
+                        print_err(r, "<%s:%d> ??? cgi.scriptType=%s\n", __func__, __LINE__, get_cgi_type(r->scriptType));
                         r->err = -1;
                         cgi_del_from_list(r);
                         end_response(r);
@@ -478,17 +475,17 @@ static int cgi_poll(int num_chld, RequestManager *ReqMan)
 //======================================================================
 static void worker(Connect *r)
 {
-    if ((r->resp.scriptType == CGI) || 
-        (r->resp.scriptType == PHPCGI))
+    if ((r->scriptType == CGI) || 
+        (r->scriptType == PHPCGI))
     {
         cgi_worker(r);
     }
-    else if ((r->resp.scriptType == PHPFPM) || 
-        (r->resp.scriptType == FASTCGI))
+    else if ((r->scriptType == PHPFPM) || 
+        (r->scriptType == FASTCGI))
     {
         fcgi_worker(r);
     }
-    else if (r->resp.scriptType == SCGI)
+    else if (r->scriptType == SCGI)
     {
         scgi_worker(r);
     }
@@ -578,7 +575,7 @@ int cgi_stdin(Connect *r)
     }
     else if (r->cgi.dir == TO_CGI)
     {
-        if ((r->resp.scriptType == CGI) || (r->resp.scriptType == PHPCGI))
+        if ((r->scriptType == CGI) || (r->scriptType == PHPCGI))
         {
             // write to pipe
             int ret = WritePipe(r, r->cgi.p, r->cgi.len_buf, PIPE_BUFSIZE, TimeoutPipe);
@@ -605,7 +602,7 @@ int cgi_stdin(Connect *r)
                 }
             }
         }
-        else if (r->resp.scriptType == SCGI)
+        else if (r->scriptType == SCGI)
         {
             int n = send(r->fcgi.fd, r->cgi.p, r->cgi.len_buf, 0);
             if (n == SOCKET_ERROR)
@@ -638,7 +635,7 @@ int cgi_stdin(Connect *r)
         else
         {
             print_err(r, "<%s:%d> ??? Error: CGI_TYPE=%s\n", 
-                __func__, __LINE__, get_cgi_type(r->resp.scriptType));
+                __func__, __LINE__, get_cgi_type(r->scriptType));
             return -RS502;
         }
     }
@@ -955,7 +952,7 @@ int cgi_find_empty_line(Connect *r)
 //======================================================================
 int cgi_read_hdrs(Connect *r)
 {
-    if ((r->resp.scriptType == CGI) || (r->resp.scriptType == PHPCGI))
+    if ((r->scriptType == CGI) || (r->scriptType == PHPCGI))
     {
         // read_from_pipe;
         unsigned int len_read = r->cgi.size_buf - r->cgi.len_buf - 1;
@@ -991,7 +988,7 @@ int cgi_read_hdrs(Connect *r)
     }
     else
     {
-        print_err(r, "<%s:%d> ??? scriptType=%d\n", __func__, __LINE__, r->resp.scriptType);
+        print_err(r, "<%s:%d> ??? scriptType=%d\n", __func__, __LINE__, r->scriptType);
         return -1;
     }
 
@@ -1202,11 +1199,11 @@ int cgi_create_proc(Connect* r)
     wstring commandLine;
     wstring wPath;
 
-    if (r->resp.scriptType == CGI)
+    if (r->scriptType == CGI)
     {
         wPath = conf->wCgiDir + cgi_script_file(r->wScriptName);
     }
-    else if (r->resp.scriptType == PHPCGI)
+    else if (r->scriptType == PHPCGI)
     {
         wPath = conf->wRootDir + r->wScriptName;
     }
@@ -1270,7 +1267,7 @@ int cgi_create_proc(Connect* r)
         }
     }
 
-    if (r->resp.scriptType == PHPCGI)
+    if (r->scriptType == PHPCGI)
         r->cgi.param("REDIRECT_STATUS", "true");
     if (r->req_hdrs.iUserAgent >= 0)
         r->cgi.param("HTTP_USER_AGENT", r->req_hdrs.Value[r->req_hdrs.iUserAgent]);
@@ -1310,11 +1307,11 @@ int cgi_create_proc(Connect* r)
     r->cgi.param("REMOTE_PORT", r->remotePort);
     r->cgi.param("QUERY_STRING", r->sReqParam);
     //------------------------------------------------------------------
-    if (r->resp.scriptType == PHPCGI)
+    if (r->scriptType == PHPCGI)
     {
         commandLine = conf->wPathPHP_CGI;
     }
-    else if (r->resp.scriptType == CGI)
+    else if (r->scriptType == CGI)
     {
         if (wcsstr(r->wScriptName.c_str(), L".pl") || wcsstr(r->wScriptName.c_str(), L".cgi"))
         {

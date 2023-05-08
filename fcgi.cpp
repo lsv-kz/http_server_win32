@@ -249,13 +249,13 @@ int fcgi_create_connect(Connect *req)
         }
     }
 
-    if (req->resp.scriptType == PHPFPM)
+    if (req->scriptType == PHPFPM)
         req->fcgi.fd = create_fcgi_socket(conf->pathPHP_FPM.c_str());
-    else if (req->resp.scriptType == FASTCGI)
+    else if (req->scriptType == FASTCGI)
         req->fcgi.fd = get_sock_fcgi(req, req->wScriptName.c_str());
     else
     {
-        print_err(req, "<%s:%d> ? req->scriptType=%d\n", __func__, __LINE__, req->resp.scriptType);
+        print_err(req, "<%s:%d> ? req->scriptType=%d\n", __func__, __LINE__, req->scriptType);
         return -RS500;
     }
 
@@ -273,7 +273,7 @@ void fcgi_create_param(Connect *req)
     Param param;
     req->fcgi.vPar.clear();
 
-    if (req->resp.scriptType == PHPFPM)
+    if (req->scriptType == PHPFPM)
     {
         param.name = "REDIRECT_STATUS";
         param.val = "true";
@@ -380,7 +380,7 @@ void fcgi_create_param(Connect *req)
     req->fcgi.vPar.push_back(param);
     ++i;
 
-    if (req->resp.scriptType == PHPFPM)
+    if (req->scriptType == PHPFPM)
     {
         utf16_to_utf8(conf->wRootDir + req->wScriptName, str);
         param.name = "SCRIPT_FILENAME";
