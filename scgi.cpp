@@ -9,7 +9,7 @@ void cgi_del_from_list(Connect *r);
 int scgi_set_param(Connect *r);
 int cgi_set_size_chunk(Connect *r);
 int write_to_fcgi(Connect* r);
-int scgi_read_hdrs(Connect *req);
+int scgi_read_http_headers(Connect *req);
 int cgi_stdin(Connect *req);
 int cgi_stdout(Connect *req);
 int cgi_find_empty_line(Connect *req);
@@ -223,7 +223,6 @@ int scgi_create_connect(Connect *req)
     req->cgi.status.scgi = SCGI_PARAMS;
     req->cgi.dir = TO_CGI;
     req->cgi.len_buf = 0;
-    req->timeout = conf->TimeoutCGI;
     req->sock_timer = 0;
 
     int ret = scgi_set_param(req);
@@ -321,7 +320,6 @@ void scgi_worker(Connect* r)
                 if (r->lenTail > 0)
                 {
                     r->cgi.dir = TO_CGI;
-                    r->timeout = conf->TimeoutCGI;
                     r->cgi.p = r->tail;
                     r->cgi.len_buf = r->lenTail;
                     r->tail = NULL;
@@ -331,7 +329,6 @@ void scgi_worker(Connect* r)
                 else // [r->lenTail == 0]
                 {
                     r->cgi.dir = FROM_CLIENT;
-                    r->timeout = conf->TimeOut;
                 }
             }
             else
@@ -342,7 +339,6 @@ void scgi_worker(Connect* r)
                 r->lenTail = 0;
                 r->p_newline = r->cgi.p = r->cgi.buf + 8;
                 r->cgi.len_buf = 0;
-                r->timeout = conf->TimeoutCGI;
             }
         }
     }
@@ -365,7 +361,7 @@ void scgi_worker(Connect* r)
     {
         if (r->cgi.status.scgi == SCGI_READ_HTTP_HEADERS)
         {
-            int ret = scgi_read_hdrs(r);
+            int ret = scgi_read_http_headers(r);
             if (ret < 0)
             {
                 if (ret != TRYAGAIN)
@@ -391,6 +387,7 @@ void scgi_worker(Connect* r)
                     r->resp_headers.len = r->resp_headers.s.size();
                     r->cgi.status.scgi = SCGI_SEND_HTTP_HEADERS;
                     r->cgi.dir = TO_CLIENT;
+                    r->sock_timer = 0;
                 }
             }
             else // ret == 0
@@ -451,14 +448,12 @@ void scgi_worker(Connect* r)
                                     r->lenTail = 0;
                                 }
                                 r->cgi.dir = TO_CLIENT;
-                                r->timeout = conf->TimeOut;
                             }
                             else
                             {
                                 r->cgi.len_buf = 0;
                                 r->cgi.p = NULL;
                                 r->cgi.dir = FROM_CGI;
-                                r->timeout = conf->TimeoutCGI;
                             }
                         }
                     }
@@ -509,7 +504,7 @@ void scgi_worker(Connect* r)
     
 }
 //======================================================================
-int scgi_read_hdrs(Connect *r)
+int scgi_read_http_headers(Connect *r)
 {
     unsigned int num_read;
     num_read = r->cgi.size_buf - r->cgi.len_buf - 1;
@@ -544,10 +539,6 @@ int scgi_read_hdrs(Connect *r)
     n = cgi_find_empty_line(r);
     if (n == 1) // empty line found
     {
-        r->cgi.status.scgi = SCGI_SEND_HTTP_HEADERS;
-        r->timeout = conf->TimeOut;
-        //r->fcgi.http_headers_received = true;
-        r->sock_timer = 0;
         return r->cgi.len_buf;
     }
     else if (n < 0) // error

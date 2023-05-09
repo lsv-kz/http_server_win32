@@ -243,7 +243,6 @@ mtx_.lock();
             ++num_work;
         }
     }
-
 mtx_.unlock();
 }
 //======================================================================
@@ -251,6 +250,7 @@ static void cgi_set_poll_list(Connect *r)
 {
     if (r->cgi.dir == FROM_CLIENT)
     {
+        r->timeout = conf->TimeOut;
         r->io_status = POLL;
         cgi_poll_fd[n_poll].fd = r->clientSocket;
         cgi_poll_fd[n_poll].events = POLLRDNORM;
@@ -258,6 +258,7 @@ static void cgi_set_poll_list(Connect *r)
     }
     else if (r->cgi.dir == TO_CLIENT)
     {
+        r->timeout = conf->TimeOut;
         r->io_status = POLL;
         cgi_poll_fd[n_poll].fd = r->clientSocket;
         cgi_poll_fd[n_poll].events = POLLWRNORM;
@@ -265,6 +266,7 @@ static void cgi_set_poll_list(Connect *r)
     }
     else if ((r->cgi.dir == TO_CGI) || (r->cgi.dir == FROM_CGI))
     {
+        r->timeout = conf->TimeoutCGI;
         if (r->cgi.Pipe.timeout == true)
         {
             r->io_status = WAIT_PIPE;
