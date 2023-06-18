@@ -137,7 +137,7 @@ SOCKET create_fcgi_socket(const char* host)
     sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd == INVALID_SOCKET)
     {
-        ErrorStrSock(__func__, __LINE__, "Error socket()");
+        ErrorStrSock(__func__, __LINE__, "Error socket()", WSAGetLastError());
         return -1;
     }
 
@@ -162,7 +162,7 @@ SOCKET create_fcgi_socket(const char* host)
     u_long iMode = 1;
     if (ioctlsocket(sockfd, FIONBIO, &iMode) == SOCKET_ERROR)
     {
-        ErrorStrSock(__func__, __LINE__, "Error ioctlsocket()");
+        ErrorStrSock(__func__, __LINE__, "Error ioctlsocket()", WSAGetLastError());
         closesocket(sockfd);
         return -1;
     }
@@ -170,7 +170,7 @@ SOCKET create_fcgi_socket(const char* host)
     if (connect(sockfd, (struct sockaddr*)(&sock_addr), sizeof(sock_addr)) == SOCKET_ERROR)
     {
         int err = WSAGetLastError();
-        //int err = ErrorStrSock(__func__, __LINE__, "Error: connect");
+        ErrorStrSock(__func__, __LINE__, "Error accept()", err);
         if (err != WSAEWOULDBLOCK)
         {
             print_err("<%s:%d> Error connect(): %d\n", __func__, __LINE__, err);
@@ -450,7 +450,7 @@ int fcgi_stdin(Connect *r)
         r->cgi.len_buf = recv(r->clientSocket, r->cgi.buf + 8, rd, 0);
         if (r->cgi.len_buf == SOCKET_ERROR)
         {
-            int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             return -1;
@@ -471,7 +471,7 @@ int fcgi_stdin(Connect *r)
         int n = send(r->fcgi.fd, r->cgi.p, r->cgi.len_buf, 0);
         if (n == SOCKET_ERROR)
         {
-            int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             return -1;
@@ -548,7 +548,7 @@ int fcgi_stdout(Connect *r)
             r->cgi.len_buf = recv(r->fcgi.fd, r->cgi.buf + 8, len, 0);
             if (r->cgi.len_buf == SOCKET_ERROR)
             {
-                int err = GetLastError();
+                int err = WSAGetLastError();
                 if (err == WSAEWOULDBLOCK)
                     return TRYAGAIN;
                 r->err = -1;
@@ -614,7 +614,7 @@ int fcgi_stdout(Connect *r)
                 int n = recv(r->fcgi.fd, buf, len, 0);
                 if (n == SOCKET_ERROR)
                 {
-                    int err = GetLastError();
+                    int err = WSAGetLastError();
                     if (err == WSAEWOULDBLOCK)
                         return TRYAGAIN;
                     r->err = -1;
@@ -644,7 +644,7 @@ int fcgi_stdout(Connect *r)
         int ret = send(r->clientSocket, r->cgi.p, r->cgi.len_buf, 0);
         if (ret == SOCKET_ERROR)
         {
-            int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             r->err = -1;
@@ -698,9 +698,9 @@ int fcgi_read_http_headers(Connect *r)
     int n = recv(r->fcgi.fd, r->cgi.p, num_read, 0);
     if (n == SOCKET_ERROR)
     {
-        int err = GetLastError();
+        int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK)
-            return -WSAEWOULDBLOCK;
+            return TRYAGAIN;
         r->err = -RS502;
         cgi_del_from_list(r);
         end_response(r);
@@ -743,8 +743,25 @@ int write_to_fcgi(Connect* r)
     int ret = send(r->fcgi.fd, r->cgi.p, r->cgi.len_buf, 0);
     if (ret == SOCKET_ERROR)
     {
-        int err = GetLastError();
-        return -err;
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK)
+            return TRYAGAIN;
+        else if ((err == WSAENOTCONN) && (r->cgi.status.fcgi == FASTCGI_BEGIN))
+        {
+            if (r->scriptType == SCGI)
+            {
+                if (r->cgi.status.scgi == SCGI_PARAMS)
+                    return TRYAGAIN;
+            }
+            else
+            {
+                if (r->cgi.status.fcgi == FASTCGI_BEGIN)
+                    return TRYAGAIN;
+            }
+        }
+
+        ErrorStrSock(__func__, __LINE__, "Error send()", err);
+        return -1;
     }
     else
     {
@@ -770,12 +787,9 @@ int fcgi_read_header(Connect* r)
         }
         else if (n == SOCKET_ERROR)
         {
-            int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
-            {
-                //print_err(r, "<%s:%d> ERR_TRY_AGAIN\n", __func__, __LINE__);
-                return -WSAEWOULDBLOCK;
-            }
+                return TRYAGAIN;
             print_err(r, "<%s:%d> err=%d\n", __func__, __LINE__, err);
             return -1;
         }
@@ -835,13 +849,14 @@ void fcgi_worker(Connect* r)
                 r->cgi.status.fcgi = FASTCGI_PARAMS;
             }
         }
-        else if (ret == -WSAENOTCONN)
-            return;
         else if (ret < 0)
         {
-            r->err = -RS502;
-            cgi_del_from_list(r);
-            end_response(r);
+            if (ret != TRYAGAIN)
+            {
+                r->err = -RS502;
+                cgi_del_from_list(r);
+                end_response(r);
+            }
         }
     }
     else if (r->cgi.status.fcgi == FASTCGI_PARAMS)
@@ -926,7 +941,6 @@ void fcgi_worker(Connect* r)
                 r->fcgi.dataLen = 0;
                 r->fcgi.paddingLen = 0;
                 r->fcgi.len_header = 0;
-
                 r->tail = NULL;
                 r->p_newline = r->cgi.p = r->cgi.buf + 8;
                 r->cgi.len_buf = 0;
@@ -1062,7 +1076,7 @@ void fcgi_worker(Connect* r)
                 int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
                 if (wr == SOCKET_ERROR)
                 {
-                    int err = GetLastError();
+                    int err = WSAGetLastError();
                     if (err == WSAEWOULDBLOCK)
                         return;
                     r->err = -1;
@@ -1077,12 +1091,12 @@ void fcgi_worker(Connect* r)
                     r->resp_headers.len -= wr;
                     if (r->resp_headers.len == 0)
                     {
-                        /*if (r->reqMethod == M_HEAD)
+                        if (r->reqMethod == M_HEAD)
                         {
                             cgi_del_from_list(r);
                             end_response(r);
                         }
-                        else*/
+                        else
                         {
                             r->cgi.status.fcgi = FASTCGI_SEND_ENTITY;
                             r->sock_timer = 0;
@@ -1171,8 +1185,7 @@ int read_padding(Connect *r)
         int n = recv(r->fcgi.fd, buf, len, 0);
         if (n == SOCKET_ERROR)
         {
-            int err = ErrorStrSock(__func__, __LINE__, "Error recv()");
-            //int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             r->err = -1;

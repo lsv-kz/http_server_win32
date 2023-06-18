@@ -357,6 +357,12 @@ public:
         resp.countRespHeaders = 0;
         resp.sTime = "";
         hdrs = "";
+        
+        cgi.Pipe.hEvent = INVALID_HANDLE_VALUE;
+        cgi.Pipe.parentPipe = INVALID_HANDLE_VALUE;
+        fcgi.fd = -1;
+        
+        mode_send = NO_CHUNK;
     }
 
     int hd_read();
@@ -403,7 +409,7 @@ int response2(RequestManager* ReqMan, Connect* req);
 int options(Connect* req);
 int index_dir(Connect* req, std::wstring& path);
 //----------------------------------------------------------------------
-int ErrorStrSock(const char* f, int line, const char* s);
+int ErrorStrSock(const char* f, int line, const char* s, int err);
 int PrintError(const char* f, int line, const char* s);
 std::string get_time();
 void get_time(std::string& s);

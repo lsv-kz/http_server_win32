@@ -322,15 +322,11 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         clientSocket = accept(sockServer, (struct sockaddr*)&clientAddr, &addrSize);
         if (clientSocket == INVALID_SOCKET)
         {
-            int err = ErrorStrSock(__func__, __LINE__, "Error accept()");
+            int err = ErrorStrSock(__func__, __LINE__, "Error accept()", WSAGetLastError());
             if (err == WSAEMFILE)
-            {
                 continue;
-            }
             else
-            {
                 break;
-            }
         }
 
         Connect* req;
@@ -349,6 +345,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         }
 
         req->init();
+        get_time(req->resp.sTime);
         req->numChld = numChld;
         req->numConn = ++allConn;
         req->numReq = 1;

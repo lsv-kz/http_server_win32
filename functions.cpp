@@ -27,10 +27,9 @@ int PrintError(const char* f, int line, const char* s)
     return err;
 }
 //======================================================================
-int ErrorStrSock(const char* f, int line, const char* s)
+int ErrorStrSock(const char* f, int line, const char* s, int err)
 {
     LPVOID lpMsgBuf = NULL;
-    int err = WSAGetLastError();
 
     FormatMessage
     (
@@ -653,39 +652,6 @@ const char *get_cgi_dir(DIRECT n)
 
     return "?";
 }
-
-
-//======================================================================
-void hex_dump_stderr(const char *s, int line, const void *p, int n)
-{
-    int count, addr = 0, col;
-    unsigned char *buf = (unsigned char*)p;
-    char str[18], str2[127];
-    String out;
-    out << "<" << s << ":" << line << ">--------------- HEX ---------------\n";
-    for(count = 0; count < n;)
-    {
-        snprintf(str2, sizeof(str2), "%08X  ", addr);
-        out << str2;
-        for(col = 0, addr = addr + 0x10; (count < n) && (col < 16); count++, col++)
-        {
-            if (col == 8)
-                out << " ";
-            snprintf(str2, sizeof(str2), "%02X ", *(buf + count));
-            out << str2;
-            str[col] = (*(buf + count) >= 32 && *(buf + count) < 127) ? *(buf + count) : '.';
-        }
-        str[col] = 0;
-        if (col <= 8)
-            out << " ";
-        snprintf(str2, sizeof(str2), "%*s  %s\n",(16 - (col)) * 3, "", str);
-        out << str2;
-    }
-    
-    snprintf(str2, sizeof(str2), "-----------------------------------------------------------\r\n");
-    out << str2;
-    print_err(out.c_str());
-}
 //======================================================================
 int send_file(SOCKET sock, int fd_in, char* buf, int size)
 {
@@ -705,9 +671,12 @@ int send_file(SOCKET sock, int fd_in, char* buf, int size)
     wr = send(sock, buf, rd, 0);
     if (wr == SOCKET_ERROR)
     {
-        int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+        int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK)
+        {
+            _lseeki64(fd_in, -rd, SEEK_CUR);
             return TRYAGAIN;
+        }
         return -1;
     }
 
@@ -729,7 +698,8 @@ int Connect::hd_read()
     int n = recv(clientSocket, req.buf + req.len, len, 0);
     if (n == SOCKET_ERROR)
     {
-        if (n == WSAEWOULDBLOCK)
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK)
             return TRYAGAIN;
         return -1;
     }

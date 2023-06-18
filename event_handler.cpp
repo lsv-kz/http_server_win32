@@ -2,9 +2,8 @@
 
 // POLLERR=0x1, POLLHUP=0x2, POLLNVAL=0x4, POLLPRI=0x400, POLLRDBAND=0x200
 // POLLRDNORM=0x100, POLLWRNORM=0x10, POLLIN=0x300, POLLOUT=0x10
-// 0x13, 0x2, 0x12
 using namespace std;
-
+//======================================================================
 static Connect* work_list_start = NULL;
 static Connect* work_list_end = NULL;
 
@@ -24,7 +23,7 @@ int send_html(Connect* r);
 void set_part(Connect *r);
 int create_multipart_head(Connect *req);
 //======================================================================
-int send_entity(Connect* req)//, char* rd_buf, int size_buf
+int send_entity(Connect* req)
 {
     int ret;
     int len;
@@ -54,12 +53,10 @@ int send_entity(Connect* req)//, char* rd_buf, int size_buf
     return ret;
 }
 //======================================================================
-void del_from_list(Connect* r)
+static void del_from_list(Connect *r)
 {
-    if ((r->source_entity == FROM_FILE) && (r->event == POLLWRNORM))
+    if ((r->source_entity == FROM_FILE) || (r->source_entity == MULTIPART_ENTITY))
         _close(r->resp.fd);
-    else
-        get_time(r->resp.sTime);
 
     if (r->prev && r->next)
     {
@@ -99,12 +96,14 @@ mtx_.unlock();
     int i = 0;
     __time64_t t = _time64(NULL);
     Connect* r = work_list_start, *next;
-
     for (; r; r = next)
     {
         next = r->next;
 
-        if (((int)(t - r->sock_timer) >= r->timeout) && (r->sock_timer != 0))
+        if (r->sock_timer == 0)
+            r->sock_timer = t;
+
+        if ((int)(t - r->sock_timer) >= r->timeout)
         {
             if (r->operation != READ_REQUEST)
             {
@@ -119,9 +118,6 @@ mtx_.unlock();
         }
         else
         {
-            if (r->sock_timer == 0)
-                r->sock_timer = t;
-
             pollfd_array[i].fd = r->clientSocket;
             pollfd_array[i].events = r->event;
             ++i;
@@ -133,6 +129,8 @@ mtx_.unlock();
 //======================================================================
 int poll_(int num_chld, int nfd, RequestManager* ReqMan)
 {
+    if (nfd <= 0)
+        return 0;
     int ret = WSAPoll(pollfd_array, nfd, conf->TimeoutPoll);
     if (ret == -1)
     {
@@ -181,7 +179,7 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                         int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
                         if (wr == SOCKET_ERROR)
                         {
-                            int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                            int err = WSAGetLastError();
                             if (err != WSAEWOULDBLOCK)
                             {
                                 r->err = -1;
@@ -240,7 +238,7 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                         int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
                         if (wr == SOCKET_ERROR)
                         {
-                            int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                            int err = WSAGetLastError();
                             if (err != WSAEWOULDBLOCK)
                             {
                                 r->err = -1;
@@ -293,7 +291,7 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
                 int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
                 if (wr == SOCKET_ERROR)
                 {
-                    int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                    int err = WSAGetLastError();
                     if (err != WSAEWOULDBLOCK)
                     {
                         r->err = -1;
@@ -511,7 +509,7 @@ int send_html(Connect* r)
     int ret = send(r->clientSocket, r->html.p, r->html.len, 0);
     if (ret == SOCKET_ERROR)
     {
-        int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+        int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK)
             return TRYAGAIN;
         return -1;

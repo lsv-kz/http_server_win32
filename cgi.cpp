@@ -282,8 +282,7 @@ static void cgi_set_poll_list(Connect *r)
 //======================================================================
 static void cgi_set_poll_list()
 {
-    __time64_t t = 0;
-    _time64(&t);
+    __time64_t t = _time64(NULL);
     n_poll = n_wait_pipe = n_work = 0;
     Connect *r = work_list_start, *next = NULL;
     for ( ; r; r = next)
@@ -348,7 +347,7 @@ static int cgi_poll(int num_chld, RequestManager *ReqMan)
         ret = WSAPoll(cgi_poll_fd, n_poll, time_poll);
         if (ret == SOCKET_ERROR)
         {
-            ErrorStrSock(__func__, __LINE__, "Error WSAPoll()");
+            ErrorStrSock(__func__, __LINE__, "Error WSAPoll()", WSAGetLastError());
             return -1;
         }
         else if (ret == 0)
@@ -423,6 +422,7 @@ static int cgi_poll(int num_chld, RequestManager *ReqMan)
                                 r->cgi.p = r->cgi.buf + 8;
                                 cgi_set_size_chunk(r);
                                 r->cgi.dir = TO_CLIENT;
+                                r->io_status = WORK;
                                 r->mode_send = CHUNK_END;
                                 r->timeout = conf->TimeOut;
                                 r->sock_timer = 0;
@@ -558,8 +558,7 @@ int cgi_stdin(Connect *r)
         r->cgi.len_buf = recv(r->clientSocket, r->cgi.buf, rd, 0);
         if (r->cgi.len_buf == SOCKET_ERROR)
         {
-            int err = ErrorStrSock(__func__, __LINE__, "Error recv()");
-            //int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             return -RS502;
@@ -573,6 +572,7 @@ int cgi_stdin(Connect *r)
         r->cgi.len_post -= r->cgi.len_buf;
         r->cgi.p = r->cgi.buf;
         r->cgi.dir = TO_CGI;
+        r->io_status = WORK;
         r->timeout = conf->TimeoutCGI;
     }
     else if (r->cgi.dir == TO_CGI)
@@ -600,6 +600,7 @@ int cgi_stdin(Connect *r)
                 else
                 {
                     r->cgi.dir = FROM_CLIENT;
+                    r->io_status = WORK;
                     r->timeout = conf->TimeOut;
                 }
             }
@@ -609,7 +610,7 @@ int cgi_stdin(Connect *r)
             int n = send(r->fcgi.fd, r->cgi.p, r->cgi.len_buf, 0);
             if (n == SOCKET_ERROR)
             {
-                int err = GetLastError();
+                int err = WSAGetLastError();
                 if (err == WSAEWOULDBLOCK)
                     return TRYAGAIN;
                 print_err(r, "<%s:%d> Error send(): %d\n", __func__, __LINE__, err);
@@ -624,6 +625,7 @@ int cgi_stdin(Connect *r)
                 {
                     r->cgi.status.scgi = SCGI_READ_HTTP_HEADERS;
                     r->cgi.dir = FROM_CGI;
+                    r->io_status = WORK;
                     r->tail = NULL;
                     r->lenTail = 0;
                     r->p_newline = r->cgi.p = r->cgi.buf + 8;
@@ -631,7 +633,11 @@ int cgi_stdin(Connect *r)
                     r->timeout = conf->TimeoutCGI;
                 }
                 else
+                {
                     r->cgi.dir = FROM_CLIENT;
+                    r->io_status = WORK;
+                    r->timeout = conf->TimeOut;
+                }
             }
         }
         else
@@ -667,6 +673,7 @@ int cgi_stdout(Connect *r)// return [ TRYAGAIN | -1 | 0 | 1 | 0< ]
                 r->cgi.p = r->cgi.buf + 8;
                 cgi_set_size_chunk(r);
                 r->cgi.dir = TO_CLIENT;
+                r->io_status = WORK;
                 r->mode_send = CHUNK_END;
                 r->timeout = conf->TimeOut;
                 return r->cgi.len_buf;
@@ -676,6 +683,7 @@ int cgi_stdout(Connect *r)// return [ TRYAGAIN | -1 | 0 | 1 | 0< ]
 
         r->cgi.len_buf = read_bytes;
         r->cgi.dir = TO_CLIENT;
+        r->io_status = WORK;
         r->cgi.p = r->cgi.buf + 8;
         if (r->mode_send == CHUNK)
         {
@@ -690,7 +698,7 @@ int cgi_stdout(Connect *r)// return [ TRYAGAIN | -1 | 0 | 1 | 0< ]
         int ret = send(r->clientSocket, r->cgi.p, r->cgi.len_buf, 0);
         if (ret == SOCKET_ERROR)
         {
-            int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             return -1;
@@ -706,6 +714,7 @@ int cgi_stdout(Connect *r)// return [ TRYAGAIN | -1 | 0 | 1 | 0< ]
             else
             {
                 r->cgi.dir = FROM_CGI;
+                r->io_status = WORK;
                 r->timeout = conf->TimeoutCGI;
             }
         }
@@ -769,7 +778,7 @@ static void cgi_worker(Connect* r)
             int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
             if (wr == SOCKET_ERROR)
             {
-                int err = ErrorStrSock(__func__, __LINE__, "Error send()");
+                int err = WSAGetLastError();
                 if (err != WSAEWOULDBLOCK)
                 {
                     r->err = -1;
@@ -785,12 +794,12 @@ static void cgi_worker(Connect* r)
                 r->resp_headers.len -= wr;
                 if (r->resp_headers.len == 0)
                 {
-                    /*if (r->reqMethod == M_HEAD)
+                    if (r->reqMethod == M_HEAD)
                     {
                         cgi_del_from_list(r);
                         end_response(r);
                     }
-                    else*/
+                    else
                     {
                         r->cgi.status.cgi = CGI_SEND_ENTITY;
                         r->sock_timer = 0;
@@ -817,6 +826,7 @@ static void cgi_worker(Connect* r)
                                 r->lenTail = 0;
                             }
                             r->cgi.dir = TO_CLIENT;
+                            r->io_status = WORK;
                             r->timeout = conf->TimeOut;
                         }
                         else
@@ -824,6 +834,7 @@ static void cgi_worker(Connect* r)
                             r->cgi.len_buf = 0;
                             r->cgi.p = NULL;
                             r->cgi.dir = FROM_CGI;
+                            r->io_status = WORK;
                             r->timeout = conf->TimeoutCGI;
                         }
                     }
@@ -1004,7 +1015,6 @@ int get_overlap_result(Connect *r, DWORD *read_bytes)
     if (!bSuccess)
     {
         DWORD err = GetLastError();
-        //DWORD err = PrintError(__func__, __LINE__, "Error GetOverlappedResult()");
         if (err == ERROR_BROKEN_PIPE) // 109
         {
             //print_err(r, "<%s:%d> ------ERROR_BROKEN_PIPE-----\n", __func__, __LINE__);
@@ -1062,6 +1072,7 @@ void timeout_pipe(Connect *r)
                     else
                     {
                         r->cgi.dir = FROM_CLIENT;
+                        r->io_status = WORK;
                         r->timeout = conf->TimeOut;
                     }
                 }
@@ -1120,6 +1131,7 @@ void timeout_pipe(Connect *r)
             r->cgi.len_buf = ready_bytes;
             r->cgi.p = r->cgi.buf + 8;
             r->cgi.dir = TO_CLIENT;
+            r->io_status = WORK;
             r->timeout = conf->TimeOut;
             r->sock_timer = 0;
             if (r->mode_send == CHUNK)
@@ -1140,6 +1152,7 @@ void timeout_pipe(Connect *r)
                 r->cgi.p = r->cgi.buf + 8;
                 cgi_set_size_chunk(r);
                 r->cgi.dir = TO_CLIENT;
+                r->io_status = WORK;
                 r->timeout = conf->TimeOut;
                 r->sock_timer = 0;
                 r->mode_send = CHUNK_END;
@@ -1157,6 +1170,7 @@ void cgi_set_status_readheaders(Connect *r)
 {
     r->cgi.status.cgi = CGI_READ_HTTP_HEADERS;
     r->cgi.dir = FROM_CGI;
+    r->io_status = WORK;
     r->tail = NULL;
     r->lenTail = 0;
     r->p_newline = r->cgi.p = r->cgi.buf + 8;
@@ -1171,6 +1185,7 @@ void cgi_set_status_sendheaders(Connect *r)
     r->resp_headers.p = r->resp_headers.s.c_str();
     r->resp_headers.len = r->resp_headers.s.size();
     r->cgi.status.cgi = CGI_SEND_HTTP_HEADERS;
+    r->io_status = WORK;
     r->timeout = conf->TimeOut;
     r->sock_timer = 0;
 }
@@ -1437,6 +1452,7 @@ int cgi_create_proc(Connect* r)
             if (r->lenTail > 0)
             {
                 r->cgi.dir = TO_CGI;
+                r->io_status = WORK;
                 r->timeout = conf->TimeoutCGI;
                 r->cgi.p = r->tail;
                 r->cgi.len_buf = r->lenTail;
@@ -1446,6 +1462,7 @@ int cgi_create_proc(Connect* r)
             else // [r->lenTail == 0]
             {
                 r->cgi.dir = FROM_CLIENT;
+                r->io_status = WORK;
                 r->timeout = conf->TimeOut;
             }
         }

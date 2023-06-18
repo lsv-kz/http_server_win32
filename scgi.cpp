@@ -301,7 +301,7 @@ void scgi_worker(Connect* r)
         int ret = write_to_fcgi(r);
         if (ret < 0)
         {
-            if (ret != -WSAENOTCONN)
+            if (ret != TRYAGAIN)
             {
                 r->err = -RS502;
                 cgi_del_from_list(r);
@@ -400,7 +400,7 @@ void scgi_worker(Connect* r)
                 int wr = send(r->clientSocket, r->resp_headers.p, r->resp_headers.len, 0);
                 if (wr < 0)
                 {
-                    int err = GetLastError();
+                    int err = WSAGetLastError();
                     if (err != WSAEWOULDBLOCK)
                     {
                         r->err = -1;
@@ -416,12 +416,12 @@ void scgi_worker(Connect* r)
                     r->resp_headers.len -= wr;
                     if (r->resp_headers.len == 0)
                     {
-                        /*if (r->reqMethod == M_HEAD)
+                        if (r->reqMethod == M_HEAD)
                         {
                             cgi_del_from_list(r);
                             end_response(r);
                         }
-                        else*/
+                        else
                         {
                             r->cgi.status.scgi = SCGI_SEND_ENTITY;
                             r->sock_timer = 0;
@@ -518,7 +518,7 @@ int scgi_read_http_headers(Connect *r)
     int n = recv(r->fcgi.fd, r->cgi.p, num_read, 0);
     if (n == SOCKET_ERROR)
     {
-        int err = GetLastError();
+        int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK)
             return TRYAGAIN;
         r->err = -RS502;
@@ -559,7 +559,7 @@ int scgi_stdout(Connect *req)
         req->cgi.len_buf = recv(fd, req->cgi.buf + 8, req->cgi.size_buf, 0);
         if (req->cgi.len_buf == SOCKET_ERROR)
         {
-            int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             print_err(req, "<%s:%d> Error read from script(): %d\n", __func__, __LINE__, err);
@@ -594,7 +594,7 @@ int scgi_stdout(Connect *req)
         int ret = send(req->clientSocket, req->cgi.p, req->cgi.len_buf, 0);
         if (ret == SOCKET_ERROR)
         {
-            int err = GetLastError();
+            int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK)
                 return TRYAGAIN;
             print_err(req, "<%s:%d> Error send to client: %d\n", __func__, __LINE__, err);
