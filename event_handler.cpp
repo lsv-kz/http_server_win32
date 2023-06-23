@@ -127,7 +127,7 @@ mtx_.unlock();
     return i;
 }
 //======================================================================
-int poll_(int num_chld, int nfd, RequestManager* ReqMan)
+int poll_(int num_chld, int nfd)
 {
     if (nfd <= 0)
         return 0;
@@ -374,7 +374,7 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
             else if (n > 0)
             {
                 del_from_list(r);
-                push_resp_list(r, ReqMan);
+                response1(r);
             }
             else
                 r->sock_timer = 0;
@@ -400,9 +400,8 @@ int poll_(int num_chld, int nfd, RequestManager* ReqMan)
     return 1;
 }
 //======================================================================
-void event_handler(RequestManager* ReqMan)
+void event_handler(int num_chld)
 {
-    int num_chld = ReqMan->get_num_chld();
     int count_resp = 0;
     size_buf = conf->SndBufSize;
 
@@ -431,7 +430,7 @@ void event_handler(RequestManager* ReqMan)
         if (count_resp == 0)
             continue;
 
-        int ret = poll_(num_chld, count_resp, ReqMan);
+        int ret = poll_(num_chld, count_resp);
         if (ret < 0)
         {
             print_err("[%d]<%s:%d> Error poll_()\n", num_chld, __func__, __LINE__);

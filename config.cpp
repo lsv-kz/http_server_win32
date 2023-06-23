@@ -245,10 +245,6 @@ int read_conf_file(const char* path_conf)
                 s2 >> c.MaxRequestsPerClient;
             else if ((s1 == "NumChld") && isnumber(s2.c_str()))
                 s2 >> c.NumChld;
-            else if ((s1 == "MaxThreads") && isnumber(s2.c_str()))
-                s2 >> c.MaxThreads;
-            else if ((s1 == "MinThreads") && isnumber(s2.c_str()))
-                s2 >> c.MinThreads;
             else if ((s1 == "MaxCgiProc") && isnumber(s2.c_str()))
                 s2 >> c.MaxCgiProc;
             else if ((s1 == "TimeoutKeepAlive") && isnumber(s2.c_str()))
@@ -288,6 +284,7 @@ int read_conf_file(const char* path_conf)
             else
             {
                 fprintf(stderr, "<%s:%d> Error read config file: [%s], line %d\n", __func__, __LINE__, ss.c_str(), line_);
+                getchar();
                 exit(1);
             }
         }

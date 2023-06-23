@@ -107,8 +107,6 @@ int main_proc(const char* name_proc)
         << "\n   port = " << conf->ServerPort.c_str()
         << "\n   SndBufSize = " << conf->SndBufSize
         << "\n\n   NumChld = " << conf->NumChld
-        << "\n   MaxThreads = " << conf->MaxThreads
-        << "\n   MinThreads = " << conf->MinThreads
         << "\n\n   ListenBacklog = " << conf->ListenBacklog
         << "\n   MaxRequests = " << conf->MaxRequests
         << "\n\n   MaxRequestsPerClient " << conf->MaxRequestsPerClient

@@ -19,7 +19,7 @@ static int n_work, n_poll, n_wait_pipe;
 
 const DWORD PIPE_BUFSIZE = 1024;
 const int TimeoutPipe = 10;
-
+//----------------------------------------------------------------------
 int cgi_stdin(Connect *req);
 int cgi_stdout(Connect *req);
 int cgi_find_empty_line(Connect *r);
@@ -335,7 +335,7 @@ static void cgi_set_poll_list()
     }
 }
 //======================================================================
-static int cgi_poll(int num_chld, RequestManager *ReqMan)
+static int cgi_poll(int num_chld)
 {
     int ret = 0;
     if (n_poll > 0)
@@ -493,10 +493,8 @@ static void worker(Connect *r)
     }
 }
 //======================================================================
-void cgi_handler(RequestManager *ReqMan)
+void cgi_handler(int num_chld)
 {
-    int num_chld = ReqMan->get_num_chld();
-
     cgi_poll_fd = new(nothrow) struct pollfd [conf->MaxRequests];
     if (!cgi_poll_fd)
     {
@@ -519,7 +517,7 @@ void cgi_handler(RequestManager *ReqMan)
 
         cgi_add_work_list();
         cgi_set_poll_list();
-        if (cgi_poll(num_chld, ReqMan) < 0)
+        if (cgi_poll(num_chld) < 0)
             break;
     }
 

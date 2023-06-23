@@ -115,8 +115,6 @@ struct Config
     int SndBufSize = 16284;
 
     int NumChld = 1;
-    int MaxThreads = 18;
-    int MinThreads = 6;
     unsigned int MaxCgiProc = 10;
 
     int ListenBacklog = 128;
@@ -368,44 +366,12 @@ public:
     int hd_read();
     int find_empty_line();
 };
-
-class RequestManager
-{
-private:
-    Connect* list_start;
-    Connect* list_end;
-
-    std::mutex  mtx_thr;
-
-    std::condition_variable cond_list;
-    std::condition_variable cond_new_thr, cond_exit_thr;
-
-    int num_wait_thr, size_list;
-    int numChld, count_thr, stop_manager;
-
-    unsigned long all_thr;
-public:
-    RequestManager(const RequestManager&) = delete;
-    RequestManager(int);
-    //-------------------------------
-    int get_num_chld(void);
-    int get_num_thr(void);
-    int start_thr(void);
-    int end_thr(int);
-    void wait_exit_thr(int n);
-    friend void push_resp_list(Connect* req, RequestManager*);
-    Connect* pop_req();
-
-    int wait_create_thr(int* n);
-    void close_manager();
-};
-
 //======================================================================
 int in4_aton(const char* host, struct in_addr* addr);
 SOCKET create_server_socket(const Config* conf);
 
-void response1(RequestManager* ReqMan);
-int response2(RequestManager* ReqMan, Connect* req);
+void response1(Connect* req);
+int response2(Connect* req);
 int options(Connect* req);
 int index_dir(Connect* req, std::wstring& path);
 //----------------------------------------------------------------------
@@ -459,14 +425,14 @@ HANDLE GetHandleLogErr();
 //----------------------------------------------------------------------
 void end_response(Connect* req);
 //----------------------------------------------------------------------
-void event_handler(RequestManager* ReqMan);
+void event_handler(int n_proc);
 void push_pollin_list(Connect* req);
 void push_send_file(Connect* req);
 void push_send_multipart(Connect *req);
 void push_send_html(Connect* req);
 void close_event_handler();
 //----------------------------------------------------------------------
-void cgi_handler(RequestManager *ReqMan);
+void cgi_handler(int n_proc);
 void push_cgi(Connect *req);
 void close_cgi_handler(void);
 
