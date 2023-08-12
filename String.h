@@ -31,6 +31,26 @@ class String
         return 0;
     }
     //------------------------------------------------------------------
+    int is_float(char c)
+    {
+        switch (c)
+        {
+            case '.':
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                return 1;
+        }
+        return 0;
+    }
+    //------------------------------------------------------------------
     void append(char ch)
     {
         buf += ch;
@@ -51,6 +71,11 @@ class String
     void append(std::string& arg)
     {
         buf += arg;
+    }
+    //------------------------------------------------------------------
+    void append(String& arg)
+    {
+        buf += arg.buf;
     }
     //------------------------------------------------------------------
     void append(HANDLE h)
@@ -98,7 +123,7 @@ class String
     //------------------------------------------------------------------
     int get_part_str(char *s, int max_len)
     {
-        if (((ind_) && !is_space(buf[ind_])) || err)
+        if (err)
             return (err = 1);
         unsigned int len = buf.size();
         for (; ind_ < len; ++ind_)
@@ -140,11 +165,9 @@ class String
 public:
     String(){}
     explicit String(unsigned int n) { buf.reserve(n); }
-    //String(const String&) = delete;
-
     String(const std::string& s) { buf = s; }
-
-    String & operator >> (double&) = delete;
+    //String(const String&) = delete;
+    String& operator >> (double&) = delete;
     String& operator >> (char*) = delete;
     //------------------------------------------------------------------
     String& operator << (BaseHex b)
@@ -161,6 +184,7 @@ public:
     //------------------------------------------------------------------
     String & operator = (const char *s)
     {
+        ind_ = 0; err = 0;
         if (s)
         {
             buf.clear();
@@ -171,6 +195,7 @@ public:
     //------------------------------------------------------------------
     String & operator = (const std::string& s)
     {
+        ind_ = 0; err = 0;
         buf.clear();
         buf += s;
         return *this;
@@ -218,7 +243,7 @@ public:
             if (!is_space(buf[ind_]))
                 break;
         s.clear();
-        for (; ind_ < len; ind_++)
+        for (; ind_ < len; ++ind_)
         {
             char c = buf[ind_];
             if (is_space(c))
@@ -265,7 +290,6 @@ public:
 
         if (get_part_str(s, max_len) == 0)
         {
-    std::cout << " s   [" << s << "]\n";
             ll = strtoll(s, NULL, base_);
         }
         return *this;
@@ -322,6 +346,30 @@ public:
         return *this;
     }
     //------------------------------------------------------------------
+    String& operator >> (float& f)
+    {
+        f = 0.0;
+        int max_len = 63;
+        char s[64] = "";
+
+        unsigned int len = buf.size();
+        for (; ind_ < len; ++ind_)
+            if (!is_space(buf[ind_]))
+                break;
+
+        for (int i = 0; (ind_ < len) && (i < max_len); ++ind_, ++i)
+        {
+            char c = buf[ind_];
+            if ((is_space(c)) || (!is_float(c)))
+                break;
+            s[i] = c;
+        }
+
+        f = strtof(s, NULL);
+
+        return *this;
+    }
+    //------------------------------------------------------------------
     const char *c_str() const
     {
         return buf.c_str();
@@ -333,11 +381,11 @@ public:
     }
 
     void resize(unsigned int n) { buf.resize(n); }
-    int size() { return buf.size(); }
-    int capacity() { return buf.capacity(); }
+    int size() const { return buf.size(); }
+    int capacity() const { return buf.capacity(); }
     void reserve(int n) { buf.reserve(n); }
     void clear() { buf = ""; ind_ = 0; err = 0; }
-    int error() { return err; }
+    int error() const { return err; }
 };
 
 #endif

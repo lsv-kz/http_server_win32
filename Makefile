@@ -9,7 +9,7 @@ OBJS = $(OBJSDIR)/server.o \
 	$(OBJSDIR)/fcgi.o \
 	$(OBJSDIR)/scgi.o \
 	$(OBJSDIR)/config.o \
-	$(OBJSDIR)/create_socket.o \
+	$(OBJSDIR)/socket.o \
 	$(OBJSDIR)/log.o \
 	$(OBJSDIR)/create_headers.o \
 	$(OBJSDIR)/range.o \
@@ -28,7 +28,7 @@ $(OBJSDIR)/server.o: server.cpp main.h
 $(OBJSDIR)/config.o: config.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJSDIR)/create_socket.o: create_socket.cpp main.h
+$(OBJSDIR)/socket.o: socket.cpp main.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJSDIR)/log.o: log.cpp main.h

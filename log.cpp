@@ -27,8 +27,7 @@ void create_logfiles(const wchar_t* log_dir, HANDLE* h, HANDLE* hErr)
 
     if (hLog == INVALID_HANDLE_VALUE)
     {
-        DWORD err = GetLastError();
-        printf("<%s:%d>  Error create_logfiles(): %lu\n", __func__, __LINE__, err);
+        PrintError(__func__, __LINE__, "CreateFileW", GetLastError());
         wcerr << ss.str() << L"\n";
         exit(1);
     }
@@ -51,8 +50,7 @@ void create_logfiles(const wchar_t* log_dir, HANDLE* h, HANDLE* hErr)
 
     if (hLogErr == INVALID_HANDLE_VALUE)
     {
-        DWORD err = GetLastError();
-        printf("<%s:%d>  Error create_logfiles(): %lu\n", __func__, __LINE__, err);
+        PrintError(__func__, __LINE__, "CreateFileW", GetLastError());
         exit(1);
     }
 
@@ -62,7 +60,7 @@ void create_logfiles(const wchar_t* log_dir, HANDLE* h, HANDLE* hErr)
 int  nChld;
 mutex mtxLog;
 //======================================================================
-void open_logfiles(HANDLE h, HANDLE hErr)
+void set_logfiles(HANDLE h, HANDLE hErr)
 {
     hLog = h;
     hLogErr = hErr;

@@ -2,89 +2,97 @@
 
 using namespace std;
 //======================================================================
-void response1(Connect* req)
+void response1(RequestManager* ReqMan)
 {
     int n;
     const char* p;
-    /*-----------------------------------------------------*/
-    int ret = parse_startline_request(req, req->arrHdrs[0].ptr, req->arrHdrs[0].len);
-    if (ret)
-    {
-        print_err(req, "<%s:%d>  Error parse_startline_request(): %d\n", __func__, __LINE__, ret);
-        goto end;
-    }
+    Connect* req;
 
-    for (int i = 1; i < req->i_arrHdrs; ++i)
+    while (1)
     {
-        ret = parse_headers(req, req->arrHdrs[i].ptr, req->arrHdrs[i].len);
-        if (ret < 0)
+        req = ReqMan->pop_req();
+        if (!req)
         {
-            print_err(req, "<%s:%d>  Error parse_headers(): %d\n", __func__, __LINE__, ret);
-            goto end;
-        }
-    }
-    /*--------------------------------------------------------*/
-    if ((req->httpProt != HTTP10) && (req->httpProt != HTTP11))
-    {
-        req->connKeepAlive = 0;
-        req->err = -RS505;
-        goto end;
-    }
-
-    if (req->numReq >= (unsigned int)conf->MaxRequestsPerClient || (req->httpProt == HTTP10))
-    {
-        print_err(req, "<%s:%d>  conf->MaxRequestsPerClient: %d\n", __func__, __LINE__, conf->MaxRequestsPerClient);
-        req->connKeepAlive = 0;
-    }
-    else if (req->req_hdrs.iConnection == -1)
-        req->connKeepAlive = 1;
-
-    if ((p = strchr(req->uri, '?')))
-    {
-        req->uriLen = p - req->uri;
-        req->sReqParam = req->uri + req->uriLen + 1;
-    }
-    else
-    {
-        req->sReqParam = NULL;
-        req->uriLen = strlen(req->uri);
-    }
-
-    if (decode(req->uri, req->uriLen, req->decodeUri, sizeof(req->decodeUri)) <= 0)
-    {
-        print_err(req, "<%s:%d> Error: decode URI\n", __func__, __LINE__);
-        req->err = -RS404;
-        goto end;
-    }
-
-    clean_path(req->decodeUri);
-    //--------------------------------------------------------------
-    n = utf8_to_utf16(req->decodeUri, req->wDecodeUri);
-    if (n)
-    {
-        print_err(req, "<%s:%d> utf8_to_utf16()=%d\n", __func__, __LINE__, n);
-        req->err = -RS500;
-        goto end;
-    }
-    //--------------------------------------------------------------
-    if ((req->reqMethod == M_GET) || 
-        (req->reqMethod == M_HEAD) || 
-        (req->reqMethod == M_POST) || 
-        (req->reqMethod == M_OPTIONS))
-    {
-        int ret = response2(req);
-        if (ret == 1) // "req" may be free !!!
-        {
+            print_err("<%s:%d>  Error req=NULL\n", __func__, __LINE__);
             return;
         }
+        /*-----------------------------------------------------*/
+        int ret = parse_startline_request(req, req->arrHdrs[0].ptr, req->arrHdrs[0].len);
+        if (ret)
+        {
+            print_err(req, "<%s:%d>  Error parse_startline_request(): %d\n", __func__, __LINE__, ret);
+            goto end;
+        }
+    
+        for (int i = 1; i < req->i_arrHdrs; ++i)
+        {
+            ret = parse_headers(req, req->arrHdrs[i].ptr, req->arrHdrs[i].len);
+            if (ret < 0)
+            {
+                print_err(req, "<%s:%d>  Error parse_headers(): %d\n", __func__, __LINE__, ret);
+                goto end;
+            }
+        }
+        /*--------------------------------------------------------*/
+        if ((req->httpProt != HTTP10) && (req->httpProt != HTTP11))
+        {
+            req->connKeepAlive = 0;
+            req->err = -RS505;
+            goto end;
+        }
+    
+        if (req->numReq >= (unsigned int)conf->MaxRequestsPerClient || (req->httpProt == HTTP10))
+        {
+            print_err(req, "<%s:%d>  conf->MaxRequestsPerClient: %d\n", __func__, __LINE__, conf->MaxRequestsPerClient);
+            req->connKeepAlive = 0;
+        }
+        else if (req->req_hdrs.iConnection == -1)
+            req->connKeepAlive = 1;
+    
+        if ((p = strchr(req->uri, '?')))
+        {
+            req->uriLen = p - req->uri;
+            req->sReqParam = req->uri + req->uriLen + 1;
+        }
+        else
+        {
+            req->sReqParam = NULL;
+            req->uriLen = strlen(req->uri);
+        }
 
-        req->err = ret;
+        if (decode(req->uri, req->uriLen, req->decodeUri, sizeof(req->decodeUri)) <= 0)
+        {
+            print_err(req, "<%s:%d> Error: decode URI\n", __func__, __LINE__);
+            req->err = -RS404;
+            goto end;
+        }
+    
+        clean_path(req->decodeUri);
+        //--------------------------------------------------------------
+        n = utf8_to_utf16(req->decodeUri, req->wDecodeUri);
+        if (n)
+        {
+            print_err(req, "<%s:%d> utf8_to_utf16()=%d\n", __func__, __LINE__, n);
+            req->err = -RS500;
+            goto end;
+        }
+        //--------------------------------------------------------------
+        if ((req->reqMethod == M_GET) || 
+            (req->reqMethod == M_HEAD) || 
+            (req->reqMethod == M_POST) || 
+            (req->reqMethod == M_OPTIONS))
+        {
+            int ret = response2(req);
+            if (ret == 1) // "req" may be free !!!
+                continue;
+            req->err = ret;
+        }
+        else
+            req->err = -RS501;
+    
+    end:
+        end_response(req);
     }
-    else
-        req->err = -RS501;
-
-end:
-    end_response(req);
 }
 //======================================================================
 int send_file(Connect *req);
@@ -205,7 +213,7 @@ int response2(Connect* req)
     DWORD attr = GetFileAttributesW(wPath.c_str());
     if (attr == INVALID_FILE_ATTRIBUTES)
     {
-        PrintError(__func__, __LINE__, "GetFileAttributesW");
+        PrintError(__func__, __LINE__, "GetFileAttributesW", GetLastError());
         return -RS500;
     }
 
@@ -265,8 +273,9 @@ int response2(Connect* req)
                     req->wScriptName = req->wDecodeUri + L"index.php";
                     if (conf->usePHP == "php-fpm")
                     {
-                        //req->scriptType = PHPFPM;
-                        return -RS404;
+                        req->scriptType = PHPFPM;
+                        push_cgi(req);
+                        return 1;
                     }
                     else if (conf->usePHP == "php-cgi")
                     {
@@ -292,9 +301,10 @@ int response2(Connect* req)
             }
             else if (conf->index_fcgi == 'y')
             {
-                /*req->scriptType = FASTCGI;
-                req->wScriptName = L"/index.fcgi";*/
-                return -RS404;
+                req->scriptType = FASTCGI;
+                req->wScriptName = L"/index.fcgi";
+                push_cgi(req);
+                return 1;
             }
 
             return index_dir(req, wPath);

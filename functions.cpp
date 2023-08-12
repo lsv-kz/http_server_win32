@@ -3,10 +3,9 @@
 using namespace std;
 
 //======================================================================
-int PrintError(const char* f, int line, const char* s)
+int PrintError(const char* f, int line, const char* s, int err)
 {
     LPVOID lpMsgBuf = NULL;
-    DWORD err = GetLastError();
 
     FormatMessage
     (
@@ -571,6 +570,8 @@ const char *get_fcgi_status(FCGI_STATUS n)
 {
     switch (n)
     {
+        case FASTCGI_CONNECT:
+            return "FASTCGI_CONNECT";
         case FASTCGI_BEGIN:
             return "FASTCGI_BEGIN";
         case FASTCGI_PARAMS:
@@ -600,6 +601,8 @@ const char *get_scgi_status(SCGI_STATUS n)
 {
     switch (n)
     {
+        case SCGI_CONNECT:
+            return "SCGI_CONNECT";
         case SCGI_PARAMS:
             return "SCGI_PARAMS";
         case SCGI_STDIN:
@@ -651,73 +654,6 @@ const char *get_cgi_dir(DIRECT n)
     }
 
     return "?";
-}
-//======================================================================
-int send_file(SOCKET sock, int fd_in, char* buf, int size)
-{
-    int rd, wr;
-    if (size <= 0)
-        return -1;
-    rd = _read(fd_in, buf, size);
-    if (rd <= 0)
-    {
-        if (rd == -1)
-            print_err("<%s:%d> Error _read(): errno=%d\n", __func__, __LINE__, errno);
-        if (rd == 0)
-            print_err("<%s:%d> Error _read()=0; %d\n", __func__, __LINE__, size);
-        return rd;
-    }
-
-    wr = send(sock, buf, rd, 0);
-    if (wr == SOCKET_ERROR)
-    {
-        int err = WSAGetLastError();
-        if (err == WSAEWOULDBLOCK)
-        {
-            _lseeki64(fd_in, -rd, SEEK_CUR);
-            return TRYAGAIN;
-        }
-        return -1;
-    }
-
-    if (rd != wr)
-    {
-        print_err("<%s:%d> %d != %d\n", __func__, __LINE__, rd, wr);
-        _lseeki64(fd_in, (long long)wr - rd, SEEK_CUR);
-    }
-
-    return wr;
-}
-//======================================================================
-int Connect::hd_read()
-{
-    if (err) return -1;
-    int len = SIZE_BUF_REQUEST - req.len - 1;
-    if (len <= 0)
-        return -RS414;
-    int n = recv(clientSocket, req.buf + req.len, len, 0);
-    if (n == SOCKET_ERROR)
-    {
-        int err = WSAGetLastError();
-        if (err == WSAEWOULDBLOCK)
-            return TRYAGAIN;
-        return -1;
-    }
-    else if (n == 0)
-        return -1;
-    lenTail += n;
-    req.len += n;
-    req.buf[req.len] = 0;
-    if (req.len > 0)
-        timeout = conf->TimeOut;
-
-    n = find_empty_line();
-    if (n == 1)
-        return req.len;
-    else if (n < 0)
-        return n;
-
-    return 0;
 }
 //======================================================================
 int Connect::find_empty_line()

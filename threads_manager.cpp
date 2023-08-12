@@ -9,6 +9,57 @@ static condition_variable cond_close_conn;
 
 static int count_conn = 0;
 //======================================================================
+RequestManager::RequestManager(int n)
+{
+    list_start = list_end = NULL;
+    numChld = n;
+}
+//----------------------------------------------------------------------
+int RequestManager::get_num_chld(void)
+{
+    return numChld;
+}
+//----------------------------------------------------------------------
+void RequestManager::push_resp_list(Connect* req)
+{
+mtx_list.lock();
+    req->next = NULL;
+    req->prev = list_end;
+    if (list_start)
+    {
+        list_end->next = req;
+        list_end = req;
+    }
+    else
+        list_start = list_end = req;
+
+mtx_list.unlock();
+    cond_list.notify_one();
+}
+//----------------------------------------------------------------------
+Connect* RequestManager::pop_req()
+{
+unique_lock<mutex> lk(mtx_list);
+    while (list_start == NULL)
+    {
+        cond_list.wait(lk);
+    }
+
+    Connect* req = list_start;
+    if (!list_start)
+        return NULL;
+
+    if (list_start->next)
+    {
+        list_start->next->prev = NULL;
+        list_start = list_start->next;
+    }
+    else
+        list_start = list_end = NULL;
+
+    return req;
+}
+//======================================================================
 void end_response(Connect* req)
 {
     if ((req->connKeepAlive == 0) || req->err < 0)
@@ -47,14 +98,14 @@ void end_response(Connect* req)
 //======================================================================
 void start_conn(void)
 {
-    mtx_conn.lock();
+mtx_conn.lock();
     ++count_conn;
-    mtx_conn.unlock();
+mtx_conn.unlock();
 }
 //======================================================================
 static void check_num_conn()
 {
-    unique_lock<mutex> lk(mtx_conn);
+unique_lock<mutex> lk(mtx_conn);
     while (count_conn >= conf->MaxRequests)
         cond_close_conn.wait(lk);
 }
@@ -74,6 +125,7 @@ BOOL WINAPI childSigHandler(DWORD signal)
 void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
 {
     unsigned long allConn = 0;
+    RequestManager ReqMan(numChld);
     setbuf(stderr, NULL);
 
     if (!SetConsoleCtrlHandler(childSigHandler, TRUE))
@@ -110,7 +162,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
     thread EventHandler;
     try
     {
-        EventHandler = thread(event_handler, numChld);
+        EventHandler = thread(event_handler, &ReqMan);
     }
     catch (...)
     {
@@ -118,7 +170,23 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         exit(1);
     }
     //------------------------------------------------------------------
-    fprintf(stderr, "[%u] +++++ pid=%u +++++\n", numChld, getpid());
+    int NumThr = 0;
+    while (NumThr < conf->NumThreads)
+    {
+        thread thr;
+        try
+        {
+            thr = thread(response1, &ReqMan);
+        }
+        catch (...)
+        {
+            print_err("%d<%s:%d> Error create thread\n", numChld, __func__, __LINE__);
+            exit(1);
+        }
+        ++NumThr;
+        thr.detach();
+    }
+    fprintf(stderr, "[%u] +++++ num threads=%u, pid=%u +++++\n", numChld, NumThr, getpid());
     //------------------------------------------------------------------
     while (1)
     {
@@ -155,7 +223,6 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         }
 
         req->init();
-        get_time(req->resp.sTime);
         req->numChld = numChld;
         req->numConn = ++allConn;
         req->numReq = 1;
@@ -191,7 +258,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
     bool res = WriteFile(hExit_out, &pid, sizeof(pid), &rd, NULL);
     if (!res)
     {
-        PrintError(__func__, __LINE__, "Error WriteFile()");
+        PrintError(__func__, __LINE__, "Error WriteFile()", GetLastError());
     }
     CloseHandle(hExit_out);
 

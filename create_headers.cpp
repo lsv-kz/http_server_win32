@@ -6,6 +6,7 @@ const char* status_resp(int st);
 //=====================================================================
 int create_response_headers(Connect* req)
 {
+    get_time(req->resp.sTime);
     req->resp_headers.s = "";
     req->resp_headers.s.reserve(512);
     if (req->resp_headers.s.error())
@@ -68,7 +69,7 @@ int create_response_headers(Connect* req)
         req->req_hdrs.Value[req->req_hdrs.iReferer] = "Error create response headers";
         return -1;
     }
-    ///print_err(req, "<%s:%d> -----------------\n%s-------------\n", __func__, __LINE__, req->resp_headers.s.c_str());
+
     return 0;
 }
 //=====================================================================
@@ -81,6 +82,7 @@ int send_message(Connect* r, const char* msg)
     if (r->httpProt == 0)
         r->httpProt = HTTP11;
 
+    get_time(r->resp.sTime);
     if (r->resp.respStatus != RS204)
     {
         const char* title = status_resp(r->resp.respStatus);

@@ -1,6 +1,5 @@
 #ifndef SERVER_H_
 #define SERVER_H_
-#define _WIN32_WINNT  0x0601
 
 #include <iostream>
 #include <fstream>
@@ -68,18 +67,18 @@ enum MODE_SEND { NO_CHUNK, CHUNK, CHUNK_END };
 enum SOURCE_ENTITY { ENTITY_NONE, FROM_FILE, FROM_DATA_BUFFER, MULTIPART_ENTITY, };
 enum OPERATION_TYPE { READ_REQUEST = 1, SEND_RESP_HEADERS, SEND_ENTITY, DYN_PAGE, };
 enum MULTIPART_STATUS { SEND_HEADERS = 1, SEND_PART, SEND_END };
-enum IO_STATUS { POLL = 1, WAIT_PIPE, WORK };
+enum IO_STATUS { SELECT = 1, WAIT_PIPE, WORK };
 
 enum CGI_TYPE { CGI_TYPE_NONE, CGI, PHPCGI, PHPFPM, FASTCGI, SCGI, };
 enum DIRECT { FROM_CGI = 1, TO_CGI, FROM_CLIENT, TO_CLIENT };
 
 enum CGI_STATUS  { CGI_CREATE_PROC = 1, CGI_STDIN, CGI_READ_HTTP_HEADERS, CGI_SEND_HTTP_HEADERS, CGI_SEND_ENTITY };
 
-enum FCGI_STATUS { FASTCGI_BEGIN = 1, FASTCGI_PARAMS, FASTCGI_STDIN,
+enum FCGI_STATUS { FASTCGI_CONNECT = 1, FASTCGI_BEGIN, FASTCGI_PARAMS, FASTCGI_STDIN,
                FASTCGI_READ_HEADER, FASTCGI_READ_HTTP_HEADERS, FASTCGI_SEND_HTTP_HEADERS, FASTCGI_SEND_ENTITY,  
                FASTCGI_READ_ERROR, FASTCGI_READ_PADDING, FASTCGI_CLOSE };
 
-enum SCGI_STATUS { SCGI_PARAMS = 1, SCGI_STDIN, SCGI_READ_HTTP_HEADERS, SCGI_SEND_HTTP_HEADERS, SCGI_SEND_ENTITY, };
+enum SCGI_STATUS { SCGI_CONNECT = 1, SCGI_PARAMS, SCGI_STDIN, SCGI_READ_HTTP_HEADERS, SCGI_SEND_HTTP_HEADERS, SCGI_SEND_ENTITY, };
 
 typedef struct fcgi_list_addr {
     std::wstring script_name;
@@ -100,10 +99,8 @@ typedef struct
 {
     OVERLAPPED oOverlap;
     HANDLE parentPipe;
-    HANDLE hEvent;
     DWORD dwState;
     BOOL fPendingIO;
-    bool timeout;
 } PIPENAMED;
 
 struct Config
@@ -115,6 +112,7 @@ struct Config
     int SndBufSize = 16284;
 
     int NumChld = 1;
+    int NumThreads = 6;
     unsigned int MaxCgiProc = 10;
 
     int ListenBacklog = 128;
@@ -124,7 +122,7 @@ struct Config
     int TimeoutKeepAlive = 5;
     int TimeOut = 30;
     int TimeoutCGI = 5;
-    int TimeoutPoll = 100;
+    int TimeoutSel = 10;
 
     std::wstring wLogDir = L"";
     std::wstring wRootDir = L"";
@@ -171,13 +169,13 @@ union STATUS { CGI_STATUS cgi; FCGI_STATUS fcgi; SCGI_STATUS scgi; };
 struct Cgi
 {
     PIPENAMED Pipe;
+    HANDLE hChld;
 
     char *bufEnv;
     size_t sizeBufEnv;
     size_t lenEnv;
         
     STATUS status;
-    DIRECT dir;
     char buf[8 + 4096 + 8];
     int  size_buf = 4096;
     long len_buf;
@@ -185,10 +183,9 @@ struct Cgi
     char *p;
         
     Cgi();
+    ~Cgi();
     int init(size_t);
     size_t param(const char* name, const char* val);
-        
-    ~Cgi();
 };
 
 class Connect
@@ -204,10 +201,11 @@ public:
     SOCKET    clientSocket;
     int       err;
     __time64_t sock_timer;
-    int       timeout;
-    short     event;
+    int timeout;
+
     OPERATION_TYPE operation;
-    IO_STATUS    io_status;
+    IO_STATUS io_status;
+    DIRECT io_direct;
 
     char remoteAddr[NI_MAXHOST];
     char remotePort[NI_MAXSERV];
@@ -244,18 +242,18 @@ public:
 
     struct
     {
-        int       iConnection;
-        int       iHost;
-        int       iUserAgent;
-        int       iReferer;
-        int       iUpgrade;
-        int       iReqContentType;
-        int       iReqContentLength;
-        int       iAcceptEncoding;
-        int       iRange;
-        int       iIf_Range;
+        int  iConnection;
+        int  iHost;
+        int  iUserAgent;
+        int  iReferer;
+        int  iUpgrade;
+        int  iReqContentType;
+        int  iReqContentLength;
+        int  iAcceptEncoding;
+        int  iRange;
+        int  iIf_Range;
 
-        int       countReqHeaders;
+        int  countReqHeaders;
         long long reqContentLength;
 
         const char* Name[MAX_HEADERS + 1];
@@ -282,8 +280,8 @@ public:
 
     struct
     {
+        SOCKET fd;
         bool http_headers_received;
-        int fd;
 
         int i_param;
         int size_par;
@@ -338,7 +336,6 @@ public:
         reqMethod = 0;
         httpProt = 0;
         connKeepAlive = 0;
-        scriptType = CGI_TYPE_NONE;
 
         req_hdrs = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, -1LL };
         req_hdrs.Name[0] = NULL;
@@ -355,28 +352,53 @@ public:
         resp.countRespHeaders = 0;
         resp.sTime = "";
         hdrs = "";
-        
-        cgi.Pipe.hEvent = INVALID_HANDLE_VALUE;
+
+        scriptType = CGI_TYPE_NONE;
         cgi.Pipe.parentPipe = INVALID_HANDLE_VALUE;
+        cgi.hChld = INVALID_HANDLE_VALUE;
         fcgi.fd = -1;
         
         mode_send = NO_CHUNK;
     }
 
-    int hd_read();
+    int read_request_headers();
     int find_empty_line();
+};
+//----------------------------------------------------------------------
+class RequestManager
+{
+private:
+    Connect* list_start;
+    Connect* list_end;
+
+    std::mutex  mtx_list;
+    std::condition_variable cond_list;
+
+    int numChld;
+public:
+    RequestManager(const RequestManager&) = delete;
+    RequestManager(int);
+    //-------------------------------
+    int get_num_chld(void);
+    void push_resp_list(Connect* req);
+    Connect* pop_req();
+
+    int wait_create_thr(int* n);
+    void close_manager();
 };
 //======================================================================
 int in4_aton(const char* host, struct in_addr* addr);
 SOCKET create_server_socket(const Config* conf);
-
-void response1(Connect* req);
+int send_file(SOCKET sock, int fd_in, char* buf, int size);
+SOCKET create_fcgi_socket(Connect *r, const char* host);
+//----------------------------------------------------------------------
+void response1(RequestManager* ReqMan);
 int response2(Connect* req);
 int options(Connect* req);
 int index_dir(Connect* req, std::wstring& path);
 //----------------------------------------------------------------------
 int ErrorStrSock(const char* f, int line, const char* s, int err);
-int PrintError(const char* f, int line, const char* s);
+int PrintError(const char* f, int line, const char* s, int err);
 std::string get_time();
 void get_time(std::string& s);
 std::string log_time();
@@ -404,6 +426,8 @@ const char *get_fcgi_status(FCGI_STATUS n);
 const char *get_scgi_status(SCGI_STATUS n);
 const char *get_cgi_type(CGI_TYPE n);
 const char *get_cgi_dir(DIRECT n);
+
+int get_num_handles(FILE *f);
 //----------------------------------------------------------------------
 int utf16_to_utf8(const std::wstring& ws, std::string& s);
 int utf16_to_utf8(const std::wstring& ws, String& s);
@@ -413,19 +437,17 @@ int utf8_to_utf16(const String& u8, std::wstring& ws);
 int decode(const char* s_in, size_t len_in, char* s_out, int len);
 std::string encode(const std::string& s_in);
 //----------------------------------------------------------------------
-int send_message(Connect* req, const char* msg);
 int create_response_headers(Connect* req);
-int send_response_headers(Connect* req);
-int send_file(SOCKET sock, int fd_in, char* buf, int size);
+int send_message(Connect* req, const char* msg);
 //----------------------------------------------------------------------
-void open_logfiles(HANDLE, HANDLE);
+void set_logfiles(HANDLE, HANDLE);
 void print_err(Connect* req, const char* format, ...);
 void print_log(Connect* req);
 HANDLE GetHandleLogErr();
 //----------------------------------------------------------------------
 void end_response(Connect* req);
 //----------------------------------------------------------------------
-void event_handler(int n_proc);
+void event_handler(RequestManager* ReqMan);
 void push_pollin_list(Connect* req);
 void push_send_file(Connect* req);
 void push_send_multipart(Connect *req);

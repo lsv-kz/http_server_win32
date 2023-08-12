@@ -245,6 +245,8 @@ int read_conf_file(const char* path_conf)
                 s2 >> c.MaxRequestsPerClient;
             else if ((s1 == "NumChld") && isnumber(s2.c_str()))
                 s2 >> c.NumChld;
+            else if ((s1 == "NumThreads") && isnumber(s2.c_str()))
+                s2 >> c.NumThreads;
             else if ((s1 == "MaxCgiProc") && isnumber(s2.c_str()))
                 s2 >> c.MaxCgiProc;
             else if ((s1 == "TimeoutKeepAlive") && isnumber(s2.c_str()))
@@ -253,8 +255,8 @@ int read_conf_file(const char* path_conf)
                 s2 >> c.TimeOut;
             else if ((s1 == "TimeoutCGI") && isnumber(s2.c_str()))
                 s2 >> c.TimeoutCGI;
-            else if ((s1 == "TimeoutPoll") && isnumber(s2.c_str()))
-                s2 >> c.TimeoutPoll;
+            else if ((s1 == "TimeoutSel") && isnumber(s2.c_str()))
+                s2 >> c.TimeoutSel;
             else if (s1 == "PerlPath")
             {
                 String stmp;
@@ -295,6 +297,7 @@ int read_conf_file(const char* path_conf)
                 if (find_bracket(fconf) == 0)
                 {
                     fprintf(stderr, "<%s:%d> Error Error not found \"{\", line %d\n", __func__, __LINE__, line_);
+                    getchar();
                     exit(1);
                 }
 
@@ -314,6 +317,7 @@ int read_conf_file(const char* path_conf)
                     else
                     {
                         printf("<%s:%d> Error read conf file(): \"index\" [%s], line %d\n", __func__, __LINE__, ss.c_str(), line_);
+                        getchar();
                         exit(1);
                     }
                 }
@@ -321,6 +325,7 @@ int read_conf_file(const char* path_conf)
                 if (!(ss == "}"))
                 {
                     fprintf(stderr, "<%s:%d> Error not found \"}\", line %d\n", __func__, __LINE__, line_);
+                    getchar();
                     exit(1);
                 }
             }
@@ -329,6 +334,7 @@ int read_conf_file(const char* path_conf)
                 if (find_bracket(fconf) == 0)
                 {
                     fprintf(stderr, "<%s:%d> Error Error not found \"{\", line %d\n", __func__, __LINE__, line_);
+                    getchar();
                     exit(1);
                 }
 
@@ -344,6 +350,7 @@ int read_conf_file(const char* path_conf)
                 if (ss.str() != "}")
                 {
                     fprintf(stderr, "<%s:%d> Error not found \"}\", line %d\n", __func__, __LINE__, line_);
+                    getchar();
                     exit(1);
                 }
             }
@@ -352,6 +359,7 @@ int read_conf_file(const char* path_conf)
                 if (find_bracket(fconf) == 0)
                 {
                     fprintf(stderr, "<%s:%d> Error Error not found \"{\", line %d\n", __func__, __LINE__, line_);
+                    getchar();
                     exit(1);
                 }
 
@@ -367,18 +375,21 @@ int read_conf_file(const char* path_conf)
                 if (ss.str() != "}")
                 {
                     fprintf(stderr, "<%s:%d> Error not found \"}\", line %d\n", __func__, __LINE__, line_);
+                    getchar();
                     exit(1);
                 }
             }
             else
             {
                 fprintf(stderr, "<%s:%d> Error read config file: [%s], line %d\n", __func__, __LINE__, ss.c_str(), line_);
+                getchar();
                 exit(1);
             }
         }
         else
         {
             fprintf(stderr, "<%s:%d> Error read config file: [%s], line %d\n", __func__, __LINE__, ss.c_str(), line_);
+            getchar();
             exit(1);
         }
     }
@@ -394,7 +405,7 @@ int read_conf_file(const char* path_conf)
     if (check_path(c.wLogDir) == -1)
     {
         wcerr << L" Error log_dir: " << c.wLogDir << L"\n";
-        cin.get();
+        getchar();
         exit(1);
     }
     path_correct(c.wLogDir);
@@ -402,6 +413,7 @@ int read_conf_file(const char* path_conf)
     if (check_path(c.wRootDir) == -1)
     {
         wcerr << L"!!! Error root_dir: " << c.wRootDir << L"\n";
+        getchar();
         exit(1);
     }
 
@@ -412,6 +424,7 @@ int read_conf_file(const char* path_conf)
     if (check_path(c.wCgiDir) == -1)
     {
         wcerr << L"!!! Error cgi_dir: " << c.wCgiDir << L"\n";
+        getchar();
         exit(1);
     }
     path_correct(c.wCgiDir);

@@ -59,7 +59,7 @@ int index_dir(Connect* r, wstring & path)
     {
         String str;
         utf16_to_utf8(path, str);
-        print_err(r, "<%s:%d>  Error opendir(\"%s\")\n", __func__, __LINE__, str.c_str());
+        print_err(r, "<%s:%d> Error FindFirstFileW(\"%s\")\n", __func__, __LINE__, str.c_str());
         return -RS500;
     }
 

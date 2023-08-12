@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
             ss >> hChildLog;
             ss >> hChildLogErr;
 
-            open_logfiles(hChildLog, hChildLogErr);
+            set_logfiles(hChildLog, hChildLogErr);
             child_proc(sockServ, numChld, hReady);
             exit(0);
         }
@@ -102,17 +102,19 @@ int main_proc(const char* name_proc)
         exit(1);
     }
     cerr << " [" << get_time().c_str() << "] - server \"" << conf->ServerSoftware.c_str() << "\" run\n"
+        << "\n   hardware_concurrency = " << thread::hardware_concurrency()
         << "\n   pid = " << pid
         << "\n   ip = " << conf->ServerAddr.c_str()
         << "\n   port = " << conf->ServerPort.c_str()
         << "\n   SndBufSize = " << conf->SndBufSize
         << "\n\n   NumChld = " << conf->NumChld
+        << "\n   NumThreads = " << conf->NumThreads
         << "\n\n   ListenBacklog = " << conf->ListenBacklog
         << "\n   MaxRequests = " << conf->MaxRequests
         << "\n\n   MaxRequestsPerClient " << conf->MaxRequestsPerClient
         << "\n   TimeoutKeepAlive = " << conf->TimeoutKeepAlive
         << "\n   TimeOut = " << conf->TimeOut
-        << "\n   TimeoutPoll = " << conf->TimeoutPoll
+        << "\n   TimeoutSel = " << conf->TimeoutSel
         << "\n   TimeoutCGI = " << conf->TimeoutCGI
         << "\n\n   php: " << conf->usePHP.c_str()
         << "\n\n   path_php-fpm: " << conf->pathPHP_FPM.c_str();
