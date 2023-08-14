@@ -75,7 +75,7 @@ enum DIRECT { FROM_CGI = 1, TO_CGI, FROM_CLIENT, TO_CLIENT };
 enum CGI_STATUS  { CGI_CREATE_PROC = 1, CGI_STDIN, CGI_READ_HTTP_HEADERS, CGI_SEND_HTTP_HEADERS, CGI_SEND_ENTITY };
 
 enum FCGI_STATUS { FASTCGI_CONNECT = 1, FASTCGI_BEGIN, FASTCGI_PARAMS, FASTCGI_STDIN,
-               FASTCGI_READ_HEADER, FASTCGI_READ_HTTP_HEADERS, FASTCGI_SEND_HTTP_HEADERS, FASTCGI_SEND_ENTITY,  
+               FASTCGI_READ_HEADER, FASTCGI_READ_HTTP_HEADERS, FASTCGI_SEND_HTTP_HEADERS, FASTCGI_SEND_ENTITY,
                FASTCGI_READ_ERROR, FASTCGI_READ_PADDING, FASTCGI_CLOSE };
 
 enum SCGI_STATUS { SCGI_CONNECT = 1, SCGI_PARAMS, SCGI_STDIN, SCGI_READ_HTTP_HEADERS, SCGI_SEND_HTTP_HEADERS, SCGI_SEND_ENTITY, };
@@ -174,14 +174,14 @@ struct Cgi
     char *bufEnv;
     size_t sizeBufEnv;
     size_t lenEnv;
-        
+
     STATUS status;
     char buf[8 + 4096 + 8];
     int  size_buf = 4096;
     long len_buf;
     long len_post;
     char *p;
-        
+
     Cgi();
     ~Cgi();
     int init(size_t);
@@ -215,7 +215,7 @@ public:
         char buf[SIZE_BUF_REQUEST];
         int  len;
     } req;
-    
+
     char* p_newline;
     char* tail;
     int   lenTail;
@@ -231,10 +231,10 @@ public:
     size_t uriLen;
 
     int  reqMethod;
-    
+
     std::wstring wScriptName;
     CGI_TYPE scriptType;
-    
+
     const char* sReqParam;
     char* sRange;
     int   httpProt;
@@ -304,7 +304,7 @@ public:
 
     SOURCE_ENTITY source_entity;
     MODE_SEND mode_send;
-    
+
     struct {
         int  respStatus;
         std::string sTime;
@@ -357,7 +357,7 @@ public:
         cgi.Pipe.parentPipe = INVALID_HANDLE_VALUE;
         cgi.hChld = INVALID_HANDLE_VALUE;
         fcgi.fd = -1;
-        
+
         mode_send = NO_CHUNK;
     }
 

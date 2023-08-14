@@ -139,7 +139,7 @@ mtx_.unlock();
                 }
                 else
                 {
-                    print_err(r, "<%s:%d> Error: io_direct=%d, operation=%d\n", __func__, __LINE__, 
+                    print_err(r, "<%s:%d> Error: io_direct=%d, operation=%d\n", __func__, __LINE__,
                                 r->io_direct, r->operation);
                     r->err = -1;
                     del_from_list(r);
@@ -336,10 +336,10 @@ static int send_html(Connect* r)
 static void set_part(Connect *r)
 {
     r->mp.status = SEND_HEADERS;
-    
+
     r->resp_headers.len = create_multipart_head(r);
     r->resp_headers.p = r->mp.hdr.c_str();
-    
+
     r->resp.offset = r->mp.rg->start;
     r->resp.respContentLength = r->mp.rg->len;
     lseek(r->resp.fd, r->resp.offset, SEEK_SET);

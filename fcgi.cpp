@@ -40,7 +40,7 @@ void fcgi_set_header(Connect* r, int type)
     *p++ = (unsigned char) ((r->fcgi.dataLen) & 0xff);
     *p++ = r->fcgi.paddingLen;
     *p = 0;
-    
+
     r->cgi.p = r->cgi.buf;
     r->cgi.len_buf += 8;
 }
@@ -93,16 +93,8 @@ void fcgi_set_param(Connect *r)
         r->cgi.len_buf += len;
     }
 
-    if (r->cgi.len_buf > 0)
-    {
-        r->fcgi.dataLen = r->cgi.len_buf;
-        fcgi_set_header(r, FCGI_PARAMS);
-    }
-    else
-    {
-        r->fcgi.dataLen = r->cgi.len_buf;
-        fcgi_set_header(r, FCGI_PARAMS);
-    }
+    r->fcgi.dataLen = r->cgi.len_buf;
+    fcgi_set_header(r, FCGI_PARAMS);
 }
 //======================================================================
 int get_sock_fcgi(Connect* req, const wchar_t* script)
@@ -137,7 +129,7 @@ int get_sock_fcgi(Connect* req, const wchar_t* script)
         if (req->fcgi.fd == INVALID_SOCKET)
         {
             print_err(req, "<%s:%d> Error create_client_socket()\n", __func__, __LINE__);
-            return -RS500;
+            return -RS502;
         }
     }
     else
@@ -261,7 +253,7 @@ void fcgi_create_param(Connect *req)
     param.val = get_str_http_prot(req->httpProt);
     req->fcgi.vPar.push_back(param);
     ++i;
-    
+
     param.name = "SERVER_PORT";
     param.val = conf->ServerPort;
     req->fcgi.vPar.push_back(param);
@@ -458,7 +450,7 @@ int fcgi_stdout(Connect *r)
 {
     if (r->io_direct == FROM_CGI)
     {
-        if ((r->cgi.status.fcgi == FASTCGI_SEND_ENTITY) || 
+        if ((r->cgi.status.fcgi == FASTCGI_SEND_ENTITY) ||
             (r->cgi.status.fcgi == FASTCGI_READ_ERROR) ||
             (r->cgi.status.fcgi == FASTCGI_CLOSE))
         {
@@ -533,7 +525,7 @@ int fcgi_stdout(Connect *r)
             if (r->fcgi.paddingLen > 0)
             {
                 char buf[256];
-            
+
                 int len = (r->fcgi.paddingLen > (int)sizeof(buf)) ? sizeof(buf) : r->fcgi.paddingLen;
                 int n = recv(r->fcgi.fd, buf, len, 0);
                 if (n == SOCKET_ERROR)
@@ -614,8 +606,6 @@ int fcgi_read_http_headers(Connect *r)
     if (num_read <= 0)
     {
         r->err = -RS502;
-        cgi_del_from_list(r);
-        end_response(r);
         return -1;
     }
 
@@ -626,16 +616,12 @@ int fcgi_read_http_headers(Connect *r)
         if (err == WSAEWOULDBLOCK)
             return TRYAGAIN;
         r->err = -RS502;
-        cgi_del_from_list(r);
-        end_response(r);
         return -1;
     }
     else if (n == 0)
     {
         print_err(r, "<%s:%d> Error: Connection reset by peer\n", __func__, __LINE__);
         r->err = -RS502;
-        cgi_del_from_list(r);
-        end_response(r);
         return -1;
     }
 
@@ -653,8 +639,6 @@ int fcgi_read_http_headers(Connect *r)
     else if (n < 0) // error
     {
         r->err = -RS502;
-        cgi_del_from_list(r);
-        end_response(r);
         return n;
     }
 
@@ -953,7 +937,7 @@ void fcgi_worker(Connect* r)
                                 r->cgi.len_buf = r->lenTail;
                                 r->tail = NULL;
                                 r->lenTail = 0;
-                                
+
                                 r->io_direct = TO_CLIENT;
                                 r->sock_timer = 0;
                                 if (r->mode_send == CHUNK)
@@ -1016,9 +1000,9 @@ int timeout_fcgi(Connect *r)
 {
     if (r->cgi.status.fcgi == FASTCGI_CONNECT)
         return -RS502;
-    else if (((r->cgi.status.fcgi == FASTCGI_BEGIN) || 
+    else if (((r->cgi.status.fcgi == FASTCGI_BEGIN) ||
          (r->cgi.status.fcgi == FASTCGI_PARAMS) ||
-         (r->cgi.status.fcgi == FASTCGI_STDIN)) && 
+         (r->cgi.status.fcgi == FASTCGI_STDIN)) &&
        (r->io_direct == TO_CGI))
         return -RS504;
     else if (r->cgi.status.fcgi == FASTCGI_READ_HTTP_HEADERS)
@@ -1032,7 +1016,7 @@ int read_padding(Connect *r)
     if (r->fcgi.paddingLen > 0)
     {
         char buf[256];
-    
+
         int len = (r->fcgi.paddingLen > (int)sizeof(buf)) ? sizeof(buf) : r->fcgi.paddingLen;
         int n = recv(r->fcgi.fd, buf, len, 0);
         if (n == SOCKET_ERROR)

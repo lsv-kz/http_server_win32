@@ -16,14 +16,15 @@ void response1(RequestManager* ReqMan)
             print_err("<%s:%d>  Error req=NULL\n", __func__, __LINE__);
             return;
         }
-        /*-----------------------------------------------------*/
+        //--------------------------------------------------------------
+        get_time(req->resp.sTime);
         int ret = parse_startline_request(req, req->arrHdrs[0].ptr, req->arrHdrs[0].len);
         if (ret)
         {
             print_err(req, "<%s:%d>  Error parse_startline_request(): %d\n", __func__, __LINE__, ret);
             goto end;
         }
-    
+
         for (int i = 1; i < req->i_arrHdrs; ++i)
         {
             ret = parse_headers(req, req->arrHdrs[i].ptr, req->arrHdrs[i].len);
@@ -40,7 +41,7 @@ void response1(RequestManager* ReqMan)
             req->err = -RS505;
             goto end;
         }
-    
+
         if (req->numReq >= (unsigned int)conf->MaxRequestsPerClient || (req->httpProt == HTTP10))
         {
             print_err(req, "<%s:%d>  conf->MaxRequestsPerClient: %d\n", __func__, __LINE__, conf->MaxRequestsPerClient);
@@ -48,7 +49,7 @@ void response1(RequestManager* ReqMan)
         }
         else if (req->req_hdrs.iConnection == -1)
             req->connKeepAlive = 1;
-    
+
         if ((p = strchr(req->uri, '?')))
         {
             req->uriLen = p - req->uri;
@@ -66,7 +67,7 @@ void response1(RequestManager* ReqMan)
             req->err = -RS404;
             goto end;
         }
-    
+
         clean_path(req->decodeUri);
         //--------------------------------------------------------------
         n = utf8_to_utf16(req->decodeUri, req->wDecodeUri);
@@ -77,9 +78,9 @@ void response1(RequestManager* ReqMan)
             goto end;
         }
         //--------------------------------------------------------------
-        if ((req->reqMethod == M_GET) || 
-            (req->reqMethod == M_HEAD) || 
-            (req->reqMethod == M_POST) || 
+        if ((req->reqMethod == M_GET) ||
+            (req->reqMethod == M_HEAD) ||
+            (req->reqMethod == M_POST) ||
             (req->reqMethod == M_OPTIONS))
         {
             int ret = response2(req);
@@ -89,7 +90,7 @@ void response1(RequestManager* ReqMan)
         }
         else
             req->err = -RS501;
-    
+
     end:
         end_response(req);
     }

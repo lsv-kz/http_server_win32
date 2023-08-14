@@ -79,7 +79,7 @@ int Cgi::init(size_t n)
         {
             delete[] bufEnv;
         }
-        
+
         bufEnv = new(nothrow) char[sizeBufEnv];
         if (!bufEnv)
         {
@@ -102,7 +102,7 @@ size_t Cgi::param(const char* name, const char* val)
         lenVal = strlen(val);
     else
         lenVal = 0;
-    
+
     String ss(lenName + lenVal + 2);
     ss << name << '=' << val;
 
@@ -135,7 +135,7 @@ void cgi_del_from_list(Connect *r)
             DisconnectNamedPipe(r->cgi.Pipe.parentPipe);
             CloseHandle(r->cgi.Pipe.parentPipe);
         }
-        
+
         if (r->cgi.hChld != INVALID_HANDLE_VALUE)
         {
             DWORD dwWait = WaitForSingleObject(r->cgi.hChld, 2);
@@ -311,10 +311,8 @@ static void cgi_set_select_list()
 
         if ((t - r->sock_timer) >= r->timeout)
         {
-            print_err(r, "<%s:%d> Timeout=%llu, dir=%s, type=%s\n", 
-                __func__, __LINE__, t - r->sock_timer, 
-                get_cgi_dir(r->io_direct), get_cgi_type(r->scriptType));
-
+            print_err(r, "<%s:%d> Timeout=%llu, dir=%s, type=%s\n", __func__, __LINE__,
+                    t - r->sock_timer, get_cgi_dir(r->io_direct), get_cgi_type(r->scriptType));
             if ((r->scriptType == CGI) || (r->scriptType == PHPCGI))
             {
                 r->err = timeout_cgi(r);
@@ -535,7 +533,7 @@ int cgi_stdin(Connect *r)
             }
         }
     }
-    
+
     return 0;
 }
 //======================================================================
@@ -1098,9 +1096,9 @@ int cgi_create_proc(Connect* r)
     struct _stat st;
     BOOL bSuccess;
     String stmp;
-// 
+
     char pipeName[128] = "\\\\.\\pipe\\cgi";
-    
+
     if (r->cgi.init(1500) < 0)
     {
         print_err(r, "<%s:%d> Error init param object\n", __func__, __LINE__);
@@ -1161,7 +1159,7 @@ int cgi_create_proc(Connect* r)
             return -RS500;
         }
     }
-   
+
     if (r->reqMethod == M_POST)
     {
         if (r->req_hdrs.iReqContentLength >= 0)
@@ -1204,7 +1202,7 @@ int cgi_create_proc(Connect* r)
         r->cgi.param("REQUEST_METHOD", get_str_method(M_GET));
     else
         r->cgi.param("REQUEST_METHOD", get_str_method(r->reqMethod));
-    
+
     r->cgi.param("REMOTE_HOST", r->remoteAddr);
     r->cgi.param("SERVER_PROTOCOL", get_str_http_prot(r->httpProt));
 
@@ -1250,7 +1248,7 @@ int cgi_create_proc(Connect* r)
     }
     //------------------------------------------------------------------
 
-    len = strlen(pipeName); 
+    len = strlen(pipeName);
     snprintf(pipeName + len, sizeof(pipeName) - len, "%d-%d-%d", r->numChld, r->numConn, r->numReq);
     r->cgi.Pipe.parentPipe = CreateNamedPipeA(
         pipeName,
@@ -1355,7 +1353,7 @@ int cgi_create_proc(Connect* r)
     r->tail = NULL;
     r->lenTail = 0;
     r->sock_timer = 0;
-    
+
     r->mode_send = ((r->httpProt == HTTP11) && r->connKeepAlive) ? CHUNK : NO_CHUNK;
 
     return 0;
@@ -1475,7 +1473,7 @@ int WritePipe(Connect *r, const char* buf, int lenBuf, int sizePipeBuf, int time
 //======================================================================
 int timeout_cgi(Connect *r)
 {
-    if ((r->cgi.status.cgi <= CGI_READ_HTTP_HEADERS) && 
+    if ((r->cgi.status.cgi <= CGI_READ_HTTP_HEADERS) &&
        ((r->io_direct == TO_CGI) || (r->io_direct == FROM_CGI)))
         return -RS504;
     else
@@ -1484,7 +1482,7 @@ int timeout_cgi(Connect *r)
 //======================================================================
 int get_resp_status(Connect *r)
 {
-    if ((r->cgi.status.cgi <= CGI_READ_HTTP_HEADERS) && 
+    if ((r->cgi.status.cgi <= CGI_READ_HTTP_HEADERS) &&
        ((r->io_direct == TO_CGI) || (r->io_direct == FROM_CGI)))
         return -RS502;
     else

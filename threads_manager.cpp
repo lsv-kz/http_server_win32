@@ -133,7 +133,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
         fprintf(stderr, "\nERROR: Could not set control handler\n");
         return;
     }
-    
+
     WSADATA WsaDat;
     int err = WSAStartup(MAKEWORD(2, 2), &WsaDat);
     if (err != 0)

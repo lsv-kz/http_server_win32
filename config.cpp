@@ -41,7 +41,7 @@ int getLine(ifstream& fi, String& ss)
         ++line_;
         line_inc = 0;
     }
-    
+
     while (fi.get(ch))
     {
         if ((char)ch == '\n')
@@ -134,7 +134,7 @@ int find_bracket(ifstream& fi)
         ++line_;
         line_inc = 0;
     }
-    
+
     while (fi.get(ch))
     {
         if (ch == '#')
@@ -305,7 +305,7 @@ int read_conf_file(const char* path_conf)
                 {
                     if (ss == "}")
                        break;
-               
+
                     if (ss == "index.html")
                         c.index_html = 'y';
                     else if (ss == "index.php")

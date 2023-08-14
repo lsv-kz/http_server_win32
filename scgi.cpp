@@ -19,7 +19,7 @@ int scgi_set_size_data(Connect* r)
     int i = 7;
     char *p = r->cgi.buf;
     p[i--] = ':';
-    
+
     for ( ; i >= 0; --i)
     {
         p[i] = (size % 10) + '0';
@@ -27,7 +27,7 @@ int scgi_set_size_data(Connect* r)
         if (size == 0)
             break;
     }
-    
+
     if (size != 0)
         return -1;
 
@@ -113,7 +113,7 @@ int scgi_create_param(Connect *r)
     param.val = r->uri;
     r->fcgi.vPar.push_back(param);
     ++i;
-    
+
     param.name = "DOCUMENT_URI";
     param.val = r->decodeUri;
     r->fcgi.vPar.push_back(param);
@@ -138,7 +138,7 @@ int scgi_create_param(Connect *r)
     param.val = get_str_http_prot(r->httpProt);
     r->fcgi.vPar.push_back(param);
     ++i;
-    
+
     param.name = "SERVER_PORT";
     param.val = conf->ServerPort;
     r->fcgi.vPar.push_back(param);
@@ -217,12 +217,12 @@ int scgi_create_param(Connect *r)
     if (i != (int)r->fcgi.vPar.size())
     {
         print_err(r, "<%s:%d> Error: create fcgi param list\n", __func__, __LINE__);
-        return -1;
+        return -RS500;
     }
 
     r->fcgi.size_par = i;
     r->fcgi.i_param = 0;
-    
+
     r->cgi.status.scgi = SCGI_PARAMS;
     r->io_direct = TO_CGI;
     r->cgi.len_buf = 0;
@@ -262,7 +262,7 @@ int scgi_set_param(Connect *r)
 
         memcpy(r->cgi.p, r->fcgi.vPar[r->fcgi.i_param].name.c_str(), len_name);
         r->cgi.p += len_name;
-        
+
         memcpy(r->cgi.p, "\0", 1);
         r->cgi.p += 1;
 
@@ -277,7 +277,7 @@ int scgi_set_param(Connect *r)
 
         r->cgi.len_buf += len;
     }
-    
+
     if(r->fcgi.i_param < r->fcgi.size_par)
     {
         print_err(r, "<%s:%d> Error: size of param > size of buf\n", __func__, __LINE__);
@@ -285,7 +285,7 @@ int scgi_set_param(Connect *r)
     }
 
     if (r->cgi.len_buf > 0)
-    {      
+    {
         scgi_set_size_data(r);
     }
     else
@@ -357,7 +357,7 @@ int scgi_stdin(Connect *r)
             }
         }
     }
-    
+
     return 0;
 }
 //======================================================================
@@ -391,7 +391,7 @@ void scgi_worker(Connect* r)
             }
             return;
         }
-        
+
         if (r->cgi.len_buf == 0)
         {
             r->sock_timer = 0;
@@ -590,7 +590,6 @@ void scgi_worker(Connect* r)
             end_response(r);
         }
     }
-    
 }
 //======================================================================
 int scgi_read_http_headers(Connect *r)
@@ -624,7 +623,7 @@ int scgi_read_http_headers(Connect *r)
     r->cgi.len_buf += n;
     r->cgi.p += n;
     *(r->cgi.p) = 0;
-  
+
     n = cgi_find_empty_line(r);
     if (n == 1) // empty line found
     {
@@ -709,7 +708,7 @@ int timeout_scgi(Connect *r)
 {
     if (r->cgi.status.scgi == SCGI_CONNECT)
         return -RS502;
-    else if (((r->cgi.status.scgi == SCGI_PARAMS) || (r->cgi.status.scgi == SCGI_STDIN)) && 
+    else if (((r->cgi.status.scgi == SCGI_PARAMS) || (r->cgi.status.scgi == SCGI_STDIN)) &&
         (r->io_direct == TO_CGI))
         return -RS504;
     else if (r->cgi.status.scgi == SCGI_READ_HTTP_HEADERS)

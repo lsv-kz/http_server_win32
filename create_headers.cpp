@@ -6,7 +6,6 @@ const char* status_resp(int st);
 //=====================================================================
 int create_response_headers(Connect* req)
 {
-    get_time(req->resp.sTime);
     req->resp_headers.s = "";
     req->resp_headers.s.reserve(512);
     if (req->resp_headers.s.error())
@@ -26,7 +25,7 @@ int create_response_headers(Connect* req)
         if (req->resp.respContentType)
             req->resp_headers.s << "Content-Type: " << req->resp.respContentType << "\r\n";
         req->resp_headers.s << "Content-Length: " << req->resp.respContentLength << "\r\n";
-        
+
         req->resp_headers.s << "Content-Range: bytes " << req->resp.offset << "-"
             << (req->resp.offset + req->resp.respContentLength - 1)
             << "/" << req->resp.fileSize << "\r\n";
@@ -61,7 +60,7 @@ int create_response_headers(Connect* req)
     }
 
     req->resp_headers.s << "\r\n";
-    
+
     if (req->resp_headers.s.error())
     {
         print_err(req, "<%s:%d> Error create response headers\n", __func__, __LINE__);

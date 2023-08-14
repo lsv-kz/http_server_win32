@@ -45,7 +45,7 @@ bool compareVec(stFile& s1, stFile& s2)
 }
 //======================================================================
 int index_dir(Connect* r, wstring & path)
-{    
+{
     int dirs, files;
     WIN32_FIND_DATAW ffd;
     HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -67,8 +67,8 @@ int index_dir(Connect* r, wstring & path)
     do
     {
         if (ffd.cFileName[0] == '.') continue;
-        if ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) || 
-            (ffd.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) || 
+        if ((ffd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ||
+            (ffd.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) ||
             (ffd.dwFileAttributes & FILE_ATTRIBUTE_DEVICE) ||
             (ffd.dwFileAttributes > FILE_ATTRIBUTE_NORMAL))
         {

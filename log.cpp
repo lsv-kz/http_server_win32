@@ -116,7 +116,7 @@ void print_log(Connect* req)
         << " - [" << log_time() << "] - ";
     if (req->reqMethod > 0)
         ss << "\"" << get_str_method(req->reqMethod) << " "
-        << req->decodeUri << ((req->sReqParam) ? "?" : "") << ((req->sReqParam) ? req->sReqParam : "") 
+        << req->decodeUri << ((req->sReqParam) ? "?" : "") << ((req->sReqParam) ? req->sReqParam : "")
         << " " << get_str_http_prot(req->httpProt) << "\" ";
     else
         ss << "\"-\" ";

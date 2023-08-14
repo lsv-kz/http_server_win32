@@ -12,7 +12,7 @@ int PrintError(const char* f, int line, const char* s, int err)
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
         err,
-        MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), // 1. LANG_NEUTRAL  
+        MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), // 1. LANG_NEUTRAL
         (LPTSTR)& lpMsgBuf,
         0,
         NULL
@@ -35,7 +35,7 @@ int ErrorStrSock(const char* f, int line, const char* s, int err)
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
         err,
-        MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), // 1. LANG_NEUTRAL  
+        MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), // 1. LANG_NEUTRAL
         (LPTSTR)& lpMsgBuf,
         0,
         NULL
@@ -57,7 +57,7 @@ string get_time()
 
     _time64(&now);
     _gmtime64_s(&t, &now);
- 
+
     strftime(s, sizeof(s), "%a, %d %b %Y %H:%M:%S GMT", &t);
     return s;
 }
@@ -70,7 +70,7 @@ void get_time(string& str)
 
     _time64(&now);
     _gmtime64_s(&t, &now);
- 
+
     strftime(s, sizeof(s), "%a, %d %b %Y %H:%M:%S GMT", &t);
     str = s;
 }
@@ -97,7 +97,7 @@ const char* strstr_case(const char* s1, const char* s2)
     if (*s2 == 0) return s1;
 
     int diff = ('a' - 'A');
-    
+
     for (; ; ++s1)
     {
         c1 = *s1;
@@ -688,7 +688,7 @@ int Connect::find_empty_line()
                 len_line++;
             i++;
         }
-        
+
         if (pLF) // found end of line '\n'
         {
             if (pCR == NULL)

@@ -137,7 +137,7 @@ void Ranges::parse_ranges(char *sRange)
             }
             else
             {
-                err =  RS416;
+                err = RS416;
                 return;
             }
         }

@@ -254,9 +254,9 @@ int write_to_fcgi(Connect* r)
     if (ret == SOCKET_ERROR)
     {
         int err = WSAGetLastError();
-        if (err == WSAEWOULDBLOCK)   // 10035 
+        if (err == WSAEWOULDBLOCK)   // 10035
             return TRYAGAIN;
-        else if (err == WSAENOTCONN) // 10057 
+        else if (err == WSAENOTCONN) // 10057
         {
             if (r->scriptType == SCGI)
             {
@@ -279,7 +279,7 @@ int write_to_fcgi(Connect* r)
         r->cgi.p += ret;
         r->sock_timer = 0;
     }
-    
+
     return ret;
 }
 //======================================================================
@@ -292,7 +292,7 @@ int fcgi_read_header(Connect* r)
         n = recv(r->fcgi.fd, r->fcgi.buf + r->fcgi.len_header, len, 0);
         if (n == 0)
         {
-            return -1;  
+            return -1;
         }
         else if (n == SOCKET_ERROR)
         {
