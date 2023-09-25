@@ -103,30 +103,46 @@ mtx_conn.lock();
 mtx_conn.unlock();
 }
 //======================================================================
-static void check_num_conn()
+int is_maxconn()
 {
-unique_lock<mutex> lk(mtx_conn);
-    while (count_conn >= conf->MaxRequests)
-        cond_close_conn.wait(lk);
+mtx_conn.lock();
+    int n = 0;
+    if (count_conn >= conf->MaxWorkConnections)
+        n = 1;
+mtx_conn.unlock();
+    return n;
 }
 //======================================================================
+enum {_pipe_ = 1, _sock_};
+static int line_ = 0;
+static int numProc;
+static unsigned long allConn = 0;
+static SOCKET sock;
+static HANDLE pIn_, pOut_;
+
+void close_proc(SOCKET, int);
+
 BOOL WINAPI childSigHandler(DWORD signal)
 {
-
     if (signal == CTRL_C_EVENT)
     {
-        print_err("<%s> signal: Ctrl-C\n", __func__);
-        WSACleanup();
+        print_err("%d<%s> signal: Ctrl-C; num conn: %lu; %d\n", numProc, __func__, allConn, line_);
+        close_proc(sock, numProc);
+        print_err("%d<%s:%d> *** Exit  ***\n", numProc, __func__, __LINE__);
+        exit(0);
     }
 
     return TRUE;
 }
 //======================================================================
-void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
+void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
 {
-    unsigned long allConn = 0;
     RequestManager ReqMan(numChld);
     setbuf(stderr, NULL);
+    numProc = numChld;
+    sock = sockServer;
+    pIn_ = pIn;
+    pOut_ = pOut;
 
     if (!SetConsoleCtrlHandler(childSigHandler, TRUE))
     {
@@ -188,82 +204,136 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE hExit_out)
     }
     fprintf(stderr, "[%u] +++++ num threads=%u, pid=%u +++++\n", numChld, NumThr, getpid());
     //------------------------------------------------------------------
-    while (1)
+    unsigned char status = CONNECT_IGN;
+    int run = 1;
+
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(sockServer, &readfds);
+
+    while (run)
     {
         SOCKET clientSocket;
-        socklen_t addrSize;
         struct sockaddr_storage clientAddr;
+        socklen_t addrSize = sizeof(struct sockaddr_storage);
 
-        check_num_conn();
-
-        addrSize = sizeof(struct sockaddr_storage);
-        clientSocket = accept(sockServer, (struct sockaddr*)&clientAddr, &addrSize);
-        if (clientSocket == INVALID_SOCKET)
+        if (status == CONNECT_IGN)
         {
-            int err = ErrorStrSock(__func__, __LINE__, "Error accept()", WSAGetLastError());
-            if (err == WSAEMFILE)
-                continue;
-            else
+    line_ = _pipe_;
+            unsigned char ch;
+            bool ret = ReadFile(pIn, &ch, sizeof(ch), NULL, NULL);
+            if (!ret)
+            {
+                DWORD err = GetLastError();
+                print_err("%d<%s:%d> Error ReadFile: %lu\n", numChld, __func__, __LINE__, err);
                 break;
-        }
+            }
 
-        Connect* req;
-        req = create_req(numChld);
-        if (!req)
-        {
-            shutdown(clientSocket, SD_BOTH);
-            closesocket(clientSocket);
+            if (ch == PROC_CLOSE)
+            {
+                // Close next process
+                WriteFile(pOut, &ch, sizeof(ch), NULL, NULL);
+                break;
+            }
+
+            status = ch;
             continue;
         }
-
-        u_long iMode = 1;
-        if (ioctlsocket(clientSocket, FIONBIO, &iMode) == SOCKET_ERROR)
+        else if (status == CONNECT_ALLOW)
         {
-            print_err("<%s:%d> Error ioctlsocket(): %d\n", __func__, __LINE__, WSAGetLastError());
+            if (is_maxconn())
+            {//------ the number of connections is the maximum ---------
+                // Allow connections next worker process
+                bool ret = WriteFile(pOut, &status, sizeof(status), NULL, NULL);
+                if (!ret)
+                {
+                    DWORD err = GetLastError();
+                    print_err("%d<%s:%d> Error WriteFile: %lu\n", numChld, __func__, __LINE__, err);
+                    break;
+                }
+
+                status = CONNECT_IGN;
+                continue;
+            }
+        line_ = _sock_;
+            FD_SET(sockServer, &readfds);
+            int ret_sel = select(sockServer + 1, &readfds, NULL, NULL, NULL);
+            if (ret_sel <= 0)
+            {
+                ErrorStrSock(__func__, numChld, "Error select()", WSAGetLastError());
+                break;
+            }
+
+            if (!FD_ISSET(sockServer, &readfds))
+                break;
+            clientSocket = accept(sockServer, (struct sockaddr*)&clientAddr, &addrSize);
+            if (clientSocket == INVALID_SOCKET)
+            {
+                int err = WSAGetLastError();
+                ErrorStrSock(__func__, numChld, "Error accept()", err);
+                if (err == WSAEMFILE)
+                    continue;
+                else
+                    break;
+            }
+        
+            Connect* req;
+            req = create_req(numChld);
+            if (!req)
+            {
+                shutdown(clientSocket, SD_BOTH);
+                closesocket(clientSocket);
+                continue;
+            }
+    
+            u_long iMode = 1;
+            if (ioctlsocket(clientSocket, FIONBIO, &iMode) == SOCKET_ERROR)
+            {
+                print_err("<%s:%d> Error ioctlsocket(): %d\n", __func__, __LINE__, WSAGetLastError());
+            }
+
+            req->init();
+            req->numChld = numChld;
+            req->numConn = ++allConn;
+            req->numReq = 1;
+            req->serverSocket = sockServer;
+            req->clientSocket = clientSocket;
+            req->timeout = conf->TimeOut;
+            req->remoteAddr[0] = '\0';
+            req->remotePort[0] = '\0';
+            getnameinfo((struct sockaddr*)&clientAddr,
+                addrSize,
+                req->remoteAddr,
+                sizeof(req->remoteAddr),
+                req->remotePort,
+                sizeof(req->remotePort),
+                NI_NUMERICHOST | NI_NUMERICSERV);
+    
+            start_conn();
+            push_pollin_list(req);
         }
 
-        req->init();
-        req->numChld = numChld;
-        req->numConn = ++allConn;
-        req->numReq = 1;
-        req->serverSocket = sockServer;
-        req->clientSocket = clientSocket;
-        req->timeout = conf->TimeOut;
-        req->remoteAddr[0] = '\0';
-        req->remotePort[0] = '\0';
-        getnameinfo((struct sockaddr*)&clientAddr,
-            addrSize,
-            req->remoteAddr,
-            sizeof(req->remoteAddr),
-            req->remotePort,
-            sizeof(req->remotePort),
-            NI_NUMERICHOST | NI_NUMERICSERV);
-
-        start_conn();
-        push_pollin_list(req);
+        if (conf->BalancedLoad == 'y')
+        {
+            status = CONNECT_IGN;
+            char ch = CONNECT_ALLOW;
+            bool ret = WriteFile(pOut, &ch, sizeof(ch), NULL, NULL);
+            if (!ret)
+            {
+                DWORD err = GetLastError();
+                print_err("<%s:%d> Error WriteFile: %lu\n", __func__, __LINE__, err);
+                break;
+            }
+        }
     }
 
-    //shutdown(sockServer, SD_BOTH);
-    closesocket(sockServer);
-
     print_err("%d<%s:%d> allConn=%u\n", numChld, __func__, __LINE__, allConn);
-
-    close_event_handler();
-    close_cgi_handler();
+    close_proc(sockServer, numChld);
 
     EventHandler.join();
     CgiHandler.join();
 
-    DWORD rd, pid = GetCurrentProcessId();
-    bool res = WriteFile(hExit_out, &pid, sizeof(pid), &rd, NULL);
-    if (!res)
-    {
-        PrintError(__func__, __LINE__, "Error WriteFile()", GetLastError());
-    }
-    CloseHandle(hExit_out);
-
     print_err("%d<%s:%d> *** Exit  ***\n", numChld, __func__, __LINE__);
-    WSACleanup();
 }
 //======================================================================
 Connect* create_req(int n_proc)
@@ -274,4 +344,14 @@ Connect* create_req(int n_proc)
         print_err("%d<%s:%d> Error malloc()\n", n_proc, __func__, __LINE__);
     }
     return req;
+}
+//======================================================================
+void close_proc(SOCKET sockServer, int numChld)
+{
+    close_event_handler();
+    close_cgi_handler();
+
+    shutdown(sockServer, SD_BOTH);
+    closesocket(sockServer);
+    WSACleanup();
 }

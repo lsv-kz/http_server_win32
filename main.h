@@ -44,6 +44,7 @@ const int MAX_HEADERS = 25;
 const int BUF_TMP_SIZE = 10000;
 const char boundary[] = "----------a9b5r7a4c0a2d5a1b8r3a";
 const int TRYAGAIN = -1000;
+const int PROC_LIMIT = 8;
 
 enum {
     RS101 = 101,
@@ -93,6 +94,14 @@ struct Param
     String val;
 };
 
+/* ---------------------------------------------------------------------
+ *                  Commands send to next process
+ * CONNECT_IGN    : The next process MUST NOT receive requests from the client
+ * CONNECT_ALLOW  : The next process MAY receive requests from client
+ * PROC_CLOSE     : Close next process
+ */
+enum { CONNECT_IGN, CONNECT_ALLOW, PROC_CLOSE };
+
 void print_err(const char* format, ...);
 //----------------------------------------------------------------------
 typedef struct
@@ -116,7 +125,9 @@ struct Config
     unsigned int MaxCgiProc = 10;
 
     int ListenBacklog = 128;
-    int MaxRequests = 512;
+    int MaxWorkConnections = 512;
+
+    char BalancedLoad;
 
     int MaxRequestsPerClient = 50;
     int TimeoutKeepAlive = 5;

@@ -2,18 +2,20 @@
 #include <sstream>
 
 using namespace std;
-
-static SOCKET sockServer = -1;
-int read_conf_file(const char* path_conf);
 //======================================================================
+static SOCKET sockServer = -1;
+HANDLE pIn[PROC_LIMIT + 1], pfd_in = NULL;
+HANDLE pOut[PROC_LIMIT + 1];
+//======================================================================
+int read_conf_file(const char* path_conf);
 int main_proc(const char* name_proc);
-void child_proc(SOCKET sock, int numChld, HANDLE);
+void child_proc(SOCKET sock, int numChld, HANDLE, HANDLE);
 //======================================================================
 BOOL WINAPI sigHandler(DWORD signal)
 {
     if (signal == CTRL_C_EVENT)
     {
-        printf("signal: Ctrl-C\n");
+        printf("<%s> signal: Ctrl-C\n", __func__);
     }
 
     return TRUE;
@@ -27,7 +29,7 @@ int main(int argc, char* argv[])
         exit(1);
     }
     //------------------------------------------------------------------
-    if (argc == 8)
+    if (argc == 9)
     {
         setlocale(LC_CTYPE, "");
         if (!strcmp(argv[1], "child"))
@@ -35,22 +37,24 @@ int main(int argc, char* argv[])
             int numChld;
             DWORD ParentID;
             SOCKET sockServ;
-            HANDLE hReady;
             HANDLE hChildLog, hChildLogErr;
+            HANDLE hIn, hOut;
 
             stringstream ss;
             ss << argv[2] << ' ' << argv[3] << ' '
                 << argv[4] << ' ' << argv[5] << ' '
-                << argv[6] << ' ' << argv[7];
+                << argv[6] << ' ' << argv[7] << ' '
+                << argv[8];
             ss >> numChld;
             ss >> ParentID;
             ss >> sockServ;
-            ss >> hReady;
             ss >> hChildLog;
             ss >> hChildLogErr;
+            ss >> hIn;
+            ss >> hOut;
 
             set_logfiles(hChildLog, hChildLogErr);
-            child_proc(sockServ, numChld, hReady);
+            child_proc(sockServ, numChld, hIn, hOut);
             exit(0);
         }
         else
@@ -110,7 +114,7 @@ int main_proc(const char* name_proc)
         << "\n\n   NumChld = " << conf->NumChld
         << "\n   NumThreads = " << conf->NumThreads
         << "\n\n   ListenBacklog = " << conf->ListenBacklog
-        << "\n   MaxRequests = " << conf->MaxRequests
+        << "\n   MaxWorkConnections = " << conf->MaxWorkConnections
         << "\n\n   MaxRequestsPerClient " << conf->MaxRequestsPerClient
         << "\n   TimeoutKeepAlive = " << conf->TimeoutKeepAlive
         << "\n   TimeOut = " << conf->TimeOut
@@ -128,26 +132,27 @@ int main_proc(const char* name_proc)
         << L"\n   ClientMaxBodySize = " << conf->ClientMaxBodySize
         << L"\n\n";
     //------------------------------------------------------------------
-    HANDLE hExit_in = NULL;
-    HANDLE hExit_out = NULL;
-
-    if (!CreatePipe(&hExit_in, &hExit_out, &saAttr, 0))
+    if (!CreatePipe(pIn, pOut, &saAttr, 0))
     {
         cerr << "<" << __LINE__ << "> Error: CreatePipe" << "\n";
         cin.get();
         exit(1);
     }
+    
+    pfd_in = pIn[0];
 
-    if (!SetHandleInformation(hExit_in, HANDLE_FLAG_INHERIT, 0))
-    {
-        cerr << "<" << __LINE__ << "> Error: SetHandleInformation" << "\n";
-        cin.get();
-        exit(1);
-    }
-    //------------------------------------------------------------------
     int numChld = 0;
     while (numChld < conf->NumChld)
     {
+        if (!CreatePipe(&pIn[numChld + 1], &pOut[numChld + 1], &saAttr, 0))
+        {
+            cerr << "<" << __LINE__ << "> Error: CreatePipe" << "\n";
+            cin.get();
+            exit(1);
+        }
+        
+        pfd_in = pIn[numChld + 1];
+        
         PROCESS_INFORMATION pi;
         ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
 
@@ -161,7 +166,8 @@ int main_proc(const char* name_proc)
 
         String ss;
         ss << name_proc << " child " << numChld << ' ' << pid << ' '
-           << sockServer << ' '<< hExit_out << ' ' << hLog << ' ' << hLogErr;
+           << sockServer << ' ' << hLog << ' ' << hLogErr << ' ' 
+           << pIn[numChld] << ' ' << pOut[numChld + 1];
 
         bool bSuccess = CreateProcessA(NULL, (char*)ss.c_str(), NULL, NULL, true, 0, NULL, NULL, &si, &pi);
         if (!bSuccess)
@@ -174,10 +180,11 @@ int main_proc(const char* name_proc)
         cout << "[" << numChld << "] ProcessId: " << pi.dwProcessId << "\n";
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
+        
+        CloseHandle(pIn[numChld]);
+        CloseHandle(pOut[numChld + 1]);
         ++numChld;
     }
-
-    CloseHandle(hExit_out);
     //------------------------------------------------------------------
     if (_wchdir(conf->wRootDir.c_str()))
     {
@@ -189,24 +196,56 @@ int main_proc(const char* name_proc)
     shutdown(sockServer, SD_BOTH);
     closesocket(sockServer);
     WSACleanup();
+    
+    unsigned char status = CONNECT_ALLOW;
+    bool ret = WriteFile(pOut[0], &status, sizeof(status), NULL, NULL);
+    if (!ret)
+    {
+        DWORD err = GetLastError();
+        print_err("<%s:%d> Error WriteFile: %lu\n", __func__, __LINE__, err);
+        print_err("<%s:%d> Close main_proc\n", __func__, __LINE__);
+        return 1;
+    }
+    
     while (1)
     {
-        //unsigned char ch;
-        DWORD rd, pid;
-        bool res = ReadFile(hExit_in, &pid, sizeof(pid), &rd, NULL);
-        if (!res || rd == 0)
+        bool ret = ReadFile(pfd_in, &status, sizeof(status), NULL, NULL);
+        if (!ret)
         {
-            int err = GetLastError();
-            print_err("<%s:%d> Error ReadFile(): %d\n", __func__, __LINE__, err);
+            DWORD err = GetLastError();
+            print_err("<%s:%d> Error ReadFile: %lu\n", __func__, __LINE__, err);
             break;
         }
-        print_err("<%s:%d> *** Child process [%d] closed ***\n", __func__, __LINE__, (int)pid);
-        printf("<%s:%d> *** Child process [%d] closed ***\n", __func__, __LINE__, (int)pid);
+
+        if (status == PROC_CLOSE)
+        {
+            ret = WriteFile(pOut[0], &status, sizeof(status), NULL, NULL);
+            if (!ret)
+            {
+                DWORD err = GetLastError();
+                print_err("<%s:%d> Error WriteFile: %lu\n", __func__, __LINE__, err);
+            }
+
+            break;
+        }
+        else if (status == CONNECT_ALLOW)
+        {
+            ret = WriteFile(pOut[0], &status, sizeof(status), NULL, NULL);
+            if (!ret)
+            {
+                DWORD err = GetLastError();
+                print_err("<%s:%d> Error WriteFile: %lu\n", __func__, __LINE__, err);
+                break;
+            }
+        }
+        else
+            print_err("<%s:%d> !!! status: 0x%x\n", __func__, __LINE__, (int)status);
     }
 
-    CloseHandle(hExit_in);
+    CloseHandle(pOut[0]);
+    CloseHandle(pfd_in);
 
-    print_err("<%s:%d> Close main_proc\n", __func__, __LINE__);
+    print_err("<%s:%d> ***** Close main_proc *****\n", __func__, __LINE__);
 
     return 0;
 }

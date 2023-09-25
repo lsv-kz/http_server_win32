@@ -1,3 +1,4 @@
+### i686-w64-mingw32 ###
 CFLAGS = -Wall -O2 -std=c++11 -m32
 CC = g++.exe
 

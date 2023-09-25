@@ -239,8 +239,10 @@ int read_conf_file(const char* path_conf)
             }
             else if ((s1 == "ListenBacklog") && isnumber(s2.c_str()))
                 s2 >> c.ListenBacklog;
-            else if ((s1 == "MaxRequests") && isnumber(s2.c_str()))
-                s2 >> c.MaxRequests;
+            else if ((s1 == "MaxWorkConnections") && isnumber(s2.c_str()))
+                s2 >> c.MaxWorkConnections;
+            else if ((s1 == "BalancedLoad") && isbool(s2.c_str()))
+                c.BalancedLoad = (char)tolower(s2[0]);
             else if ((s1 == "MaxRequestsPerClient") && isnumber(s2.c_str()))
                 s2 >> c.MaxRequestsPerClient;
             else if ((s1 == "NumChld") && isnumber(s2.c_str()))
@@ -280,7 +282,7 @@ int read_conf_file(const char* path_conf)
             else if (s1 == "UsePHP")
                 s2 >> c.usePHP;
             else if ((s1 == "ShowMediaFiles") && isbool(s2.c_str()))
-                c.ShowMediaFiles = s2[0];
+                c.ShowMediaFiles = (char)tolower(s2[0]);
             else if ((s1 == "ClientMaxBodySize") && isnumber(s2.c_str()))
                 s2 >> c.ClientMaxBodySize;
             else
@@ -430,6 +432,15 @@ int read_conf_file(const char* path_conf)
     path_correct(c.wCgiDir);
     if (c.wCgiDir[c.wCgiDir.size() - 1] == L'/')
         c.wCgiDir.resize(c.wCgiDir.size() - 1);
+    //------------------------------------------------------------------
+    if ((conf->NumChld < 1) || (conf->NumChld > PROC_LIMIT))
+    {
+        fprintf(stderr, "<%s:%d> Error: NumProc=%u\n", __func__, __LINE__, conf->NumChld);
+        return -1;
+    }
+
+    if (conf->NumChld == 1)
+        c.BalancedLoad = 'n';
 
     return 0;
 }
