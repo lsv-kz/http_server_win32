@@ -1,7 +1,8 @@
-www/
-
-objs/*.o
+www/cgi-bin/hello.exe
+www/cgi-bin/upload_file.exe
 
 server.exe
+
+objs/*.o
 
 

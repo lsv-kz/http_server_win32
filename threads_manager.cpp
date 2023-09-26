@@ -276,7 +276,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
                 else
                     break;
             }
-        
+
             Connect* req;
             req = create_req(numChld);
             if (!req)
@@ -285,7 +285,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
                 closesocket(clientSocket);
                 continue;
             }
-    
+
             u_long iMode = 1;
             if (ioctlsocket(clientSocket, FIONBIO, &iMode) == SOCKET_ERROR)
             {
@@ -308,7 +308,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
                 req->remotePort,
                 sizeof(req->remotePort),
                 NI_NUMERICHOST | NI_NUMERICSERV);
-    
+
             start_conn();
             push_pollin_list(req);
         }

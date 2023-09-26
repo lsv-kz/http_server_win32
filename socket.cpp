@@ -84,6 +84,14 @@ SOCKET create_server_socket(const Config * conf)
         return INVALID_SOCKET;
     }
 
+    u_long iMode = 1;
+    if (ioctlsocket(sockfd, FIONBIO, &iMode) == SOCKET_ERROR)
+    {
+        ErrorStrSock(__func__, __LINE__, "Error ioctlsocket()", WSAGetLastError());
+        closesocket(sockfd);
+        return INVALID_SOCKET;
+    }
+
     if (listen(sockfd, conf->ListenBacklog) == SOCKET_ERROR)
     {
         print_err("<%s:%d> Error listen(): %d\n", __func__, __LINE__, WSAGetLastError());

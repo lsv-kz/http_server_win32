@@ -4,8 +4,8 @@
 using namespace std;
 //======================================================================
 static SOCKET sockServer = -1;
-HANDLE pIn[PROC_LIMIT + 1], pfd_in = NULL;
-HANDLE pOut[PROC_LIMIT + 1];
+HANDLE pIn[PROC_LIMIT + 1], pfd_in;
+HANDLE pOut[PROC_LIMIT + 1], pfd_out;
 //======================================================================
 int read_conf_file(const char* path_conf);
 int main_proc(const char* name_proc);
@@ -85,11 +85,6 @@ int main_proc(const char* name_proc)
     DWORD pid = GetCurrentProcessId();
     HANDLE hLog, hLogErr;
     create_logfiles(conf->wLogDir.c_str(), &hLog, &hLogErr);
-
-    SECURITY_ATTRIBUTES saAttr;
-    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-    saAttr.bInheritHandle = true;
-    saAttr.lpSecurityDescriptor = NULL;
     //------------------------------------------------------------------
     sockServer = create_server_socket(conf);
     if (sockServer == INVALID_SOCKET)
@@ -132,6 +127,11 @@ int main_proc(const char* name_proc)
         << L"\n   ClientMaxBodySize = " << conf->ClientMaxBodySize
         << L"\n\n";
     //------------------------------------------------------------------
+    SECURITY_ATTRIBUTES saAttr;
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = true;
+    saAttr.lpSecurityDescriptor = NULL;
+
     if (!CreatePipe(pIn, pOut, &saAttr, 0))
     {
         cerr << "<" << __LINE__ << "> Error: CreatePipe" << "\n";
@@ -140,6 +140,7 @@ int main_proc(const char* name_proc)
     }
     
     pfd_in = pIn[0];
+    pfd_out = pOut[0];
 
     int numChld = 0;
     while (numChld < conf->NumChld)
@@ -150,9 +151,9 @@ int main_proc(const char* name_proc)
             cin.get();
             exit(1);
         }
-        
+
         pfd_in = pIn[numChld + 1];
-        
+
         PROCESS_INFORMATION pi;
         ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
 
@@ -180,7 +181,7 @@ int main_proc(const char* name_proc)
         cout << "[" << numChld << "] ProcessId: " << pi.dwProcessId << "\n";
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
-        
+
         CloseHandle(pIn[numChld]);
         CloseHandle(pOut[numChld + 1]);
         ++numChld;
@@ -196,7 +197,7 @@ int main_proc(const char* name_proc)
     shutdown(sockServer, SD_BOTH);
     closesocket(sockServer);
     WSACleanup();
-    
+
     unsigned char status = CONNECT_ALLOW;
     bool ret = WriteFile(pOut[0], &status, sizeof(status), NULL, NULL);
     if (!ret)
@@ -206,7 +207,7 @@ int main_proc(const char* name_proc)
         print_err("<%s:%d> Close main_proc\n", __func__, __LINE__);
         return 1;
     }
-    
+
     while (1)
     {
         bool ret = ReadFile(pfd_in, &status, sizeof(status), NULL, NULL);
