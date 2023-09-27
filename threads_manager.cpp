@@ -211,6 +211,8 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
     FD_ZERO(&readfds);
     FD_SET(sockServer, &readfds);
 
+    DWORD nRead, nWrite;
+
     while (run)
     {
         SOCKET clientSocket;
@@ -221,7 +223,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
         {
     line_ = _pipe_;
             unsigned char ch;
-            bool ret = ReadFile(pIn, &ch, sizeof(ch), NULL, NULL);
+            bool ret = ReadFile(pIn, &ch, sizeof(ch), &nRead, NULL);
             if (!ret)
             {
                 DWORD err = GetLastError();
@@ -232,7 +234,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
             if (ch == PROC_CLOSE)
             {
                 // Close next process
-                WriteFile(pOut, &ch, sizeof(ch), NULL, NULL);
+                WriteFile(pOut, &ch, sizeof(ch), &nWrite, NULL);
                 break;
             }
 
@@ -244,7 +246,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
             if (is_maxconn())
             {//------ the number of connections is the maximum ---------
                 // Allow connections next worker process
-                bool ret = WriteFile(pOut, &status, sizeof(status), NULL, NULL);
+                bool ret = WriteFile(pOut, &status, sizeof(status), &nWrite, NULL);
                 if (!ret)
                 {
                     DWORD err = GetLastError();
@@ -317,7 +319,7 @@ void child_proc(SOCKET sockServer, int numChld, HANDLE pIn, HANDLE pOut)
         {
             status = CONNECT_IGN;
             char ch = CONNECT_ALLOW;
-            bool ret = WriteFile(pOut, &ch, sizeof(ch), NULL, NULL);
+            bool ret = WriteFile(pOut, &ch, sizeof(ch), &nWrite, NULL);
             if (!ret)
             {
                 DWORD err = GetLastError();

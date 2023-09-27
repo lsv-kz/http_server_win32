@@ -132,9 +132,18 @@ int main_proc(const char* name_proc)
     saAttr.bInheritHandle = true;
     saAttr.lpSecurityDescriptor = NULL;
 
-    if (!CreatePipe(pIn, pOut, &saAttr, 0))
+    if (!CreatePipe(&pIn[0], &pOut[0], &saAttr, 0))
     {
-        cerr << "<" << __LINE__ << "> Error: CreatePipe" << "\n";
+        DWORD err = GetLastError();
+        print_err("<%s:%d> Error CreatePipe(): %lu\n", __func__, __LINE__, err);
+        cin.get();
+        exit(1);
+    }
+    
+    if (!SetHandleInformation(pOut[0], HANDLE_FLAG_INHERIT, 0))
+    {
+        DWORD err = GetLastError();
+        print_err("<%s:%d> Error SetHandleInformation(): %lu\n", __func__, __LINE__, err);
         cin.get();
         exit(1);
     }
@@ -147,9 +156,21 @@ int main_proc(const char* name_proc)
     {
         if (!CreatePipe(&pIn[numChld + 1], &pOut[numChld + 1], &saAttr, 0))
         {
-            cerr << "<" << __LINE__ << "> Error: CreatePipe" << "\n";
+            DWORD err = GetLastError();
+            print_err("<%s:%d> Error CreatePipe(): %lu\n", __func__, __LINE__, err);
             cin.get();
             exit(1);
+        }
+        
+        if ((numChld + 1) == conf->NumChld)
+        {
+            if (!SetHandleInformation(pIn[numChld + 1], HANDLE_FLAG_INHERIT, 0))
+            {
+                DWORD err = GetLastError();
+                print_err("<%s:%d> Error SetHandleInformation(): %lu\n", __func__, __LINE__, err);
+                cin.get();
+                exit(1);
+            }
         }
 
         pfd_in = pIn[numChld + 1];
@@ -199,7 +220,8 @@ int main_proc(const char* name_proc)
     WSACleanup();
 
     unsigned char status = CONNECT_ALLOW;
-    bool ret = WriteFile(pOut[0], &status, sizeof(status), NULL, NULL);
+    DWORD nRead, nWrite;
+    bool ret = WriteFile(pfd_out, &status, sizeof(status), &nWrite, NULL);
     if (!ret)
     {
         DWORD err = GetLastError();
@@ -210,7 +232,7 @@ int main_proc(const char* name_proc)
 
     while (1)
     {
-        bool ret = ReadFile(pfd_in, &status, sizeof(status), NULL, NULL);
+        bool ret = ReadFile(pfd_in, &status, sizeof(status), &nRead, NULL);
         if (!ret)
         {
             DWORD err = GetLastError();
@@ -220,7 +242,7 @@ int main_proc(const char* name_proc)
 
         if (status == PROC_CLOSE)
         {
-            ret = WriteFile(pOut[0], &status, sizeof(status), NULL, NULL);
+            ret = WriteFile(pfd_out, &status, sizeof(status), &nWrite, NULL);
             if (!ret)
             {
                 DWORD err = GetLastError();
@@ -231,7 +253,7 @@ int main_proc(const char* name_proc)
         }
         else if (status == CONNECT_ALLOW)
         {
-            ret = WriteFile(pOut[0], &status, sizeof(status), NULL, NULL);
+            ret = WriteFile(pfd_out, &status, sizeof(status), &nWrite, NULL);
             if (!ret)
             {
                 DWORD err = GetLastError();
@@ -243,7 +265,7 @@ int main_proc(const char* name_proc)
             print_err("<%s:%d> !!! status: 0x%x\n", __func__, __LINE__, (int)status);
     }
 
-    CloseHandle(pOut[0]);
+    CloseHandle(pfd_out);
     CloseHandle(pfd_in);
 
     print_err("<%s:%d> ***** Close main_proc *****\n", __func__, __LINE__);

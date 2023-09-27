@@ -1,6 +1,9 @@
 ### i686-w64-mingw32 ###
-CFLAGS = -Wall -O2 -std=c++11 -m32
+# g++.exe (i686-posix-sjlj, built by strawberryperl.com project) 4.9.2
+
 CC = g++.exe
+
+CFLAGS = -Wall -O2 -std=c++11 -m32
 
 OBJSDIR = objs
 
